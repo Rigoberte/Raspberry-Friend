@@ -1,7 +1,7 @@
 import pytest
-from src.raspberry_friend.model.robot import Robot
-from src.raspberry_friend.model.skill import NullSkill
-from src.raspberry_friend.model.command import Command, CommandResult
+from src.model.robot.robot import Robot
+from src.model.skills.skill import NullSkill
+from src.model.command.command import Command, CommandResult
 
 def test_robot_dispatch_returns_nullskill_when_no_skills():
     """

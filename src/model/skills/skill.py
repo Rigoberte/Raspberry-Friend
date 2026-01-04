@@ -1,5 +1,5 @@
 # src/raspberry_friend/model/skill.py
-from src.raspberry_friend.model.command import Command, CommandResult
+from src.model.command.command import Command, CommandResult
 
 class RobotSkill:
     """Interface for all Robot Skills."""
@@ -15,4 +15,4 @@ class NullSkill(RobotSkill):
         return False
 
     def handle(self, command: Command) -> CommandResult:
-        return CommandResult(False, f"No skill found to handle command '{command.name}'")
+        return CommandResult(False, f"No skill found to handle command '{command.get_name()}'")

@@ -1,7 +1,7 @@
 import pytest
-from src.raspberry_friend.model.robot import Robot
-from src.raspberry_friend.model.command import Command, CommandResult
-from src.raspberry_friend.model.skills.time_skill import TimeSkill
+from src.model.robot.robot import Robot
+from src.model.command.command import Command, CommandResult
+from src.model.skills.time_skill import TimeSkill
 
 def test_time_skill_handles_time_command():
     """

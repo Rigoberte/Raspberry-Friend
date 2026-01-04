@@ -7,6 +7,12 @@ class Command:
         self.name = name
         self.args = args
 
+    def get_name(self) -> str:
+        return str(self.name)
+
+    def get_args(self) -> Dict[str, str]:
+        return dict(self.args)
+
 class CommandResult:
     """Immutable result returned after executing a command."""
     def __init__(self, success: bool, message: str):

@@ -13,15 +13,20 @@ class RealWeatherService(WeatherService):
     """
     Fetches weather from Open-Meteo API for supported cities.
     """
+    def __init__(self):
+        pass
 
-    def get_weather(self, city: str) -> str:
+    def get_weather(self, city: str) -> dict[str, float | int | bool | str]:
         """
         Returns current weather info for a given city using the Open-Meteo API.
         If city is not supported, returns a message indicating that.
         """
         city_key = city.lower()
         if city_key not in CITY_COORDINATES:
-            return f"City '{city}' not supported yet."
+            return {
+                "success": False,
+                "message": f"City '{city}' is not supported."
+            }
 
         coords = CITY_COORDINATES[city_key]
         url = "https://api.open-meteo.com/v1/forecast"
@@ -59,6 +64,8 @@ class RealWeatherService(WeatherService):
 
             hourly = data["hourly"]
             info = {
+                "success": True,
+                "message": "Weather fetched successfully.",
                 "temperature": hourly["temperature_2m"][closest_idx],
                 "apparent_temperature": hourly["apparent_temperature"][closest_idx],
                 "precipitation_probability": hourly["precipitation_probability"][closest_idx],
@@ -70,17 +77,10 @@ class RealWeatherService(WeatherService):
                 "is_day": bool(hourly["is_day"][closest_idx])
             }
 
-            return (
-                f"{city.title()} Weather:\n"
-                f"Temperature: {info['temperature']}°C (feels like {info['apparent_temperature']}°C)\n"
-                f"Precipitation probability: {info['precipitation_probability']}%\n"
-                f"Visibility: {info['visibility']} m\n"
-                f"UV index: {info['uv_index']}\n"
-                f"Sunshine duration: {info['sunshine_duration']} s\n"
-                f"Humidity: {info['humidity']}%\n"
-                f"Dew point: {info['dew_point']}°C\n"
-                f"Daytime: {'Yes' if info['is_day'] else 'No'}"
-            )
+            return info
 
         except Exception as e:
-            return f"Could not get weather: {e}"
+            return {
+                "success": False,
+                "message": f"Error fetching weather data: {str(e)}"
+            }

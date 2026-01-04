@@ -3,9 +3,9 @@ Unit tests for WeatherSkill.
 """
 
 import pytest
-from src.raspberry_friend.model.command import Command, CommandResult
-from src.raspberry_friend.model.skills.weather_skill import WeatherSkill
-from src.raspberry_friend.services.mock_weather_service import MockWeatherService  # placeholder
+from src.model.command.command import Command, CommandResult
+from src.model.skills.weather_skill import WeatherSkill
+from src.services.weather.mock_weather_service import MockWeatherService  # placeholder
 
 def test_weather_skill_handles_weather_command_with_supported_city():
     """
@@ -18,7 +18,7 @@ def test_weather_skill_handles_weather_command_with_supported_city():
     result: CommandResult = skill.handle(command)
 
     PLACEHOLDER_TEXT = (
-        "Buenos Aires Weather (Placeholder):\n"
+        "Buenos Aires Weather:\n"
         "Temperature: 20.0°C (feels like 19.5°C)\n"
         "Precipitation probability: 10%\n"
         "Visibility: 10000 m\n"

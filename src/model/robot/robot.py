@@ -1,7 +1,7 @@
 # src/raspberry_friend/model/robot.py
 from typing import List
-from src.raspberry_friend.model.skill import RobotSkill, NullSkill
-from src.raspberry_friend.model.command import Command, CommandResult
+from src.model.skills.skill import RobotSkill, NullSkill
+from src.model.command.command import Command, CommandResult
 
 class Robot:
     """Main Robot class that manages skills and dispatches commands."""
