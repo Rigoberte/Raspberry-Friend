@@ -40,3 +40,7 @@ build/
 dist/
 *.egg-info/
 .eggs/
+
+# songs
+*.mp3
+.userdata/
