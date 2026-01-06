@@ -43,3 +43,4 @@ dist/
 
 # songs
 *.mp3
+.userdata/

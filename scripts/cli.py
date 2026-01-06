@@ -33,19 +33,20 @@ def main():
     while True:
         with patch_stdout():
             user_input = session.prompt("> ")
+            user_input = user_input.lower().strip()
         
-        if user_input.lower() in ("exit", "quit"):
+        if user_input in ("exit", "quit"):
             break
 
-        if not user_input.strip():
+        if not user_input:
             continue
 
         # Generic parser: first word is command, rest are args
-        parts = user_input.strip().split(maxsplit=1)
+        parts = user_input.split(maxsplit=1)
         name = parts[0]
         args = {}
         if len(parts) > 1:
-            args["text"] = parts[1]  # default key for now
+            args["text"] = parts[1]
 
         command = Command(name=name, args=args)
         result = robot.dispatch(command)
@@ -54,6 +55,6 @@ def main():
 if __name__ == "__main__":
     # Añadir la carpeta raíz del proyecto al path
     sys.path.append(str(pathlib.Path(__file__).parent.parent.resolve()))
-
     colorama.just_fix_windows_console()
+    
     main()

@@ -4,14 +4,14 @@ from typing import Dict
 class Command:
     """Represents a command to be executed by the Robot."""
     def __init__(self, name: str, args: Dict[str, str]):
-        self.name = name
-        self.args = args
+        self.__name__ = name
+        self.__args__ = args
 
     def get_name(self) -> str:
-        return str(self.name)
+        return str(self.__name__)
 
     def get_args(self) -> Dict[str, str]:
-        return dict(self.args)
+        return dict(self.__args__)
 
 class CommandResult:
     """Immutable result returned after executing a command."""

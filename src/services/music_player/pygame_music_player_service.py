@@ -70,7 +70,7 @@ class PygameMusicPlayerService(MusicPlayerService):
         if self.current_index < 0 or self.current_index >= len(self.playlist):
             return "No song is currently playing"
         
-        return os.path.basename(self.playlist[self.current_index])
+        return self.playlist[self.current_index]
 
     def add_to_playlist(self, song: str) -> dict[str, str | bool]:
         if not os.path.isfile(song):

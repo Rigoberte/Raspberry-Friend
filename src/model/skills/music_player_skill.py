@@ -5,6 +5,7 @@ from mutagen.mp3 import MP3
 import time
 import threading
 import sys
+import os
 
 from src.model.skills.skill import RobotSkill
 from src.model.command.command import Command, CommandResult
@@ -33,7 +34,7 @@ class MusicPlayerSkill(RobotSkill):
             case "play-song":
                 command_result = self.__play_song__(command)
 
-                time.sleep(0.5)  # brief pause to ensure playback starts
+                time.sleep(0.1)  # brief pause to ensure playback starts
                 self._progress_stop.clear()
                 self._progress_thread = threading.Thread(
                     target=self.__show_progress_bar__,
@@ -47,7 +48,7 @@ class MusicPlayerSkill(RobotSkill):
             case "resume-song":
                 command_result = self.__resume_song__()
 
-                time.sleep(0.5)  # brief pause to ensure playback resumes
+                time.sleep(0.1)  # brief pause to ensure playback resumes
                 self._progress_stop.clear()
                 self._progress_thread = threading.Thread(
                     target=self.__show_progress_bar__,
@@ -89,16 +90,11 @@ class MusicPlayerSkill(RobotSkill):
         
         command_result = self.service.play_song(song)
 
-        if not command_result.get("success", False):
-            return {
-                "success": False, 
-                "message": f"Failed to play '{song}'. Error: {command_result.get('message', 'Unknown error')}"
-            }
-        
-        return {
-            "success": True, 
-            "message": f"Playing '{song.title()}':\n"
-            }
+        return self.__handle_command_result__(
+            command_result, 
+            success_message=f"", 
+            failure_message=f"Failed to play '{song}'"
+        )
 
     def __pause_song__(self) -> dict[str, str | bool]:
         command_result = self.service.pause_song()
@@ -107,46 +103,29 @@ class MusicPlayerSkill(RobotSkill):
         if self._progress_thread is not None:
             self._progress_thread.join()
 
-        if not command_result.get("success", False):
-            return {
-                "success": False, 
-                "message": f"Failed to pause song. Error: {command_result.get('message', 'Unknown error')}"
-            }
-        
-        return {
-            "success": True, 
-            "message": "Song paused."
-        }
+        return self.__handle_command_result__(
+            command_result, 
+            success_message="Song paused",
+            failure_message="Failed to pause song"
+        )
     
     def __resume_song__(self) -> dict[str, str | bool]:
         command_result = self.service.resume_song()
-
-        if not command_result.get("success", False):
-            return {
-                "success": False, 
-                "message": f"Failed to resume song. Error: {command_result.get('message', 'Unknown error')}"
-            }
         
-        current_song = self.__current_song__()
-        
-        return {
-            "success": True, 
-            "message": f"Song resumed. Now playing '{current_song}'."
-        }
+        return self.__handle_command_result__(
+            command_result,
+            success_message="Song resumed",
+            failure_message="Failed to resume song"
+        )
     
     def __rewind_song__(self) -> dict[str, str | bool]:
         command_result = self.service.rewind_song()
 
-        if not command_result.get("success", False):
-            return {
-                "success": False, 
-                "message": f"Failed to rewind song. Error: {command_result.get('message', 'Unknown error')}"
-            }
-        
-        return {
-            "success": True, 
-            "message": "Song rewound to the beginning."
-        }
+        return self.__handle_command_result__(
+            command_result,
+            success_message="Song rewound to the beginning",
+            failure_message="Failed to rewind song"
+        )
 
     def __stop_song__(self) -> dict[str, str | bool]:
         command_result = self.service.stop_song()
@@ -155,62 +134,40 @@ class MusicPlayerSkill(RobotSkill):
         if self._progress_thread is not None:
             self._progress_thread.join()
 
-        if not command_result.get("success", False):
-            return {
-                "success": False, 
-                "message": f"Failed to stop song. Error: {command_result.get('message', 'Unknown error')}"
-            }
-        
-        return {
-            "success": True, 
-            "message": "Song stopped."
-        }
+        return self.__handle_command_result__(
+            command_result,
+            success_message="Song stopped",
+            failure_message="Failed to stop song"
+        )
     
     def __next_song__(self) -> dict[str, str | bool]:
         command_result = self.service.next_song()
 
-        if not command_result.get("success", False):
-            return {
-                "success": False, 
-                "message": f"Failed to skip to next song. Error: {command_result.get('message', 'Unknown error')}"
-            }
-        
-        current_song = self.__current_song__()
-        return {
-            "success": True, 
-            "message": f"Now playing next song: '{current_song}'."
-        }
+        return self.__handle_command_result__(
+            command_result,
+            success_message="Skipped to next song",
+            failure_message="Failed to skip to next song"
+        )
     
     def __previous_song__(self) -> dict[str, str | bool]:
         command_result = self.service.previous_song()
 
-        if not command_result.get("success", False):
-            return {
-                "success": False, 
-                "message": f"Failed to skip to previous song. Error: {command_result.get('message', 'Unknown error')}"
-            }
-        
-        current_song = self.__current_song__()
-        return {
-            "success": True, 
-            "message": f"Now playing previous song: '{current_song}'."
-        }
+        return self.__handle_command_result__(
+            command_result,
+            success_message="Skipped to previous song",
+            failure_message="Failed to skip to previous song"
+        )
     
     def __add_to_playlist__(self, command: Command) -> dict[str, str | bool]:
         song = command.get_args().get("text", "unknown song")
 
         command_result = self.service.add_to_playlist(song)
 
-        if not command_result.get("success", False):
-            return {
-                "success": False, 
-                "message": f"Failed to add '{song}' to playlist. Error: {command_result.get('message', 'Unknown error')}"
-            }
-        
-        return {
-            "success": True, 
-            "message": f"Added '{song}' to playlist."
-        }
+        return self.__handle_command_result__(
+            command_result,
+            success_message=f"Added '{song}' to playlist.",
+            failure_message=f"Failed to add '{song}' to playlist"
+        )
     
     def __current_song__(self) -> str:
         return self.service.current_song()
@@ -220,6 +177,27 @@ class MusicPlayerSkill(RobotSkill):
 
     def __get_pos__(self) -> int:
         return self.service.get_pos()
+    
+    def __handle_command_result__(self, command_result: dict[str, str | bool], success_message: str, failure_message: str) -> dict[str, str | bool]:
+        if not command_result.get("success", False):
+            return {
+                "success": False, 
+                "message": f"{failure_message}. Error: {command_result.get('message', 'Unknown error')}"
+            }
+        
+        time.sleep(0.1)  # brief pause to ensure state is updated
+        if self.service.is_busy():
+            current_song = os.path.basename(self.service.current_song())
+
+            return {
+                "success": True, 
+                "message": success_message + ". " if success_message else "" + f"Now playing '{current_song}'."
+            }
+
+        return {
+            "success": True, 
+            "message": success_message
+        }
 
     def __show_progress_bar__(self, bar_length: int = 30) -> str:
         """
