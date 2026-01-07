@@ -1,39 +1,16 @@
 import requests
 from datetime import datetime, timezone
 from src.domain.ports.outbound.weather_ports import WeatherPort
-
-# Diccionario escalable de ciudades soportadas
-CITY_COORDINATES = {
-    "buenos aires": {"lat": -34.6131, "lon": -58.3772},
-    "ba": {"lat": -34.6131, "lon": -58.3772},
-    # Más ciudades se agregan aquí
-}
+from src.adapters.outbound.weather.cities_info_adapter import CitiesInfoAdapter
 
 class RealWeatherPort(WeatherPort):
     """
     Fetches weather from Open-Meteo API for supported cities.
     """
     def __init__(self):
-        pass
+        self.CitiesInfoAdapter = CitiesInfoAdapter()
 
-    def get_weather(self, city: str) -> dict[str, float | int | bool | str]:
-        """
-        Returns current weather info for a given city using the Open-Meteo API.
-        If city is not supported, returns a message indicating that.
-        """
-        city_key = city.lower()
-        if city_key not in CITY_COORDINATES:
-            return {
-                "success": False,
-                "message": f"City '{city}' is not supported."
-            }
-
-        coords = CITY_COORDINATES[city_key]
-        url = "https://api.open-meteo.com/v1/forecast"
-        params = {
-            "latitude": coords["lat"],
-            "longitude": coords["lon"],
-            "hourly": ",".join([
+        self.PARAMS_HOURLY = [
                 "temperature_2m",
                 "precipitation_probability",
                 "apparent_temperature",
@@ -43,7 +20,28 @@ class RealWeatherPort(WeatherPort):
                 "relative_humidity_2m",
                 "dew_point_2m",
                 "is_day"
-            ]),
+            ]
+
+    def get_weather(self, city: str) -> dict[str, float | int | bool | str]:
+        """
+        Returns current weather info for a given city using the Open-Meteo API.
+        If city is not supported, returns a message indicating that.
+        """
+        likest_city = self.CitiesInfoAdapter.find_best_city(city)
+            
+        if likest_city: 
+            complete_city_name = likest_city.get("complete_city_name") 
+        else:
+            return {
+                "success": False,
+                "message": f"City '{city}' not supported."
+            }
+
+        url = "https://api.open-meteo.com/v1/forecast"
+        params = {
+            "latitude": likest_city["latitude"],
+            "longitude": likest_city["longitude"],
+            "hourly": ",".join(self.PARAMS_HOURLY),
             "forecast_days": 1
         }
 
@@ -65,7 +63,7 @@ class RealWeatherPort(WeatherPort):
             hourly = data["hourly"]
             info = {
                 "success": True,
-                "message": "Weather fetched successfully.",
+                "message": complete_city_name,
                 "temperature": hourly["temperature_2m"][closest_idx],
                 "apparent_temperature": hourly["apparent_temperature"][closest_idx],
                 "precipitation_probability": hourly["precipitation_probability"][closest_idx],

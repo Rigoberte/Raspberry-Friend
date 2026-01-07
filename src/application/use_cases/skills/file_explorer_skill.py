@@ -12,8 +12,8 @@ class FileExplorerSkill(RobotSkill):
     def __init__(self):
         self.__directory__ = ROOT  # Default directory
 
-    def can_handle(self, command: Command) -> bool:
-        return command.get_name() in ["list-files", "..", "cd", "ls", "get-path"]
+    def supported_commands(self) -> list[str]:
+        return ["list-files", "..", "cd", "ls", "get-path"]
 
     def handle(self, command: Command) -> CommandResult:
         match command.get_name():

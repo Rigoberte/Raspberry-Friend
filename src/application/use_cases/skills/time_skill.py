@@ -3,11 +3,8 @@ from src.application.use_cases.skills.skill import RobotSkill
 from src.domain.models.command import Command, CommandResult
 
 class TimeSkill(RobotSkill):
-    """Skill that returns the current time."""
-
-    def can_handle(self, command: Command) -> bool:
-        """Return True if command is 'time'."""
-        return command.get_name().lower() == "time"
+    def supported_commands(self) -> list[str]:
+        return ["time"]
 
     def handle(self, command: Command) -> CommandResult:
         """Return a CommandResult with the current time as HH:MM string."""

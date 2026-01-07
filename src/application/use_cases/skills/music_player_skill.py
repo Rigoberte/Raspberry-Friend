@@ -15,8 +15,8 @@ class MusicPlayerSkill(RobotSkill):
     def __init__(self, service: MusicPlayerPort):
         self.service = service
 
-    def can_handle(self, command: Command) -> bool:
-        return command.get_name() in [
+    def supported_commands(self) -> list[str]:
+        return [
             "play-song", "pause-song", "resume-song", 
             "rewind-song", "stop-song", 
             "next-song", "previous-song", 

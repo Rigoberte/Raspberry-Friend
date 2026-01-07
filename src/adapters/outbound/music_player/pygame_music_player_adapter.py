@@ -1,7 +1,12 @@
 from src.domain.ports.outbound.music_player_ports import MusicPlayerPort
 import pygame
 import os
-from mutagen.mp3 import MP3
+
+try:
+    from mutagen.mp3 import MP3
+    HAS_MUTAGEN = True
+except ImportError:
+    HAS_MUTAGEN = False
 
 class PygameMusicPlayerPort(MusicPlayerPort):
     def __init__(self):
@@ -112,7 +117,15 @@ class PygameMusicPlayerPort(MusicPlayerPort):
         try:
             self.current_index = index
             song = self.playlist[index]
-            duration = MP3(song).info.length
+            
+            # Try to get duration using mutagen if available
+            duration = 0
+            if HAS_MUTAGEN:
+                try:
+                    audio = MP3(song)
+                    duration = audio.info.length
+                except Exception:
+                    duration = 0
 
             self.mixer.music.load(song)
             self.mixer.music.play()

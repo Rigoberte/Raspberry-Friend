@@ -1,6 +1,5 @@
-from typing import Protocol
-from src.domain.models.command import Command, CommandResult
-from src.application.use_cases.skills.skill import RobotSkill
+from src.domain.models.command import Command
+from src.application.use_cases.skills.skill import RobotSkill, NullSkill
 
 class SkillRegistry:
     def __init__(self) -> None:
@@ -9,14 +8,13 @@ class SkillRegistry:
     def register(self, skill: RobotSkill) -> None:
         self._skills.append(skill)
     
-    def get(self, command: Command) -> RobotSkill | None:
+    def get_skill(self, command: Command) -> RobotSkill: # TODO: Remove getter
         for skill in self._skills:
             if skill.can_handle(command):
                 return skill
-        return None
+        return NullSkill()
     
-    def list(self) -> list[str]:
-        # Lista todos los comandos de todos los skills
+    def list_skills(self) -> list[str]:
         commands = []
         for skill in self._skills:
             commands.extend(skill.supported_commands())

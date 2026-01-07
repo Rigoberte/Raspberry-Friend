@@ -4,12 +4,22 @@ Unit tests for AssistantService.
 
 import pytest
 from src.application.services.assistant_service import AssistantService
+from src.application.services.task_scheduler import TaskScheduler
 from src.application.services.skill_registry import SkillRegistry
 from src.domain.models.command import Command, CommandResult
 
 
 class MockSkill:
     """Mock skill for testing."""
+    
+    def get_name(self) -> str:
+        return "mock"
+    
+    def can_handle(self, command: Command) -> bool:
+        return command.get_name() == "mock"
+    
+    def supported_commands(self) -> list[str]:
+        return ["mock"]
     
     def handle(self, command: Command) -> CommandResult:
         return CommandResult(success=True, message=f"Handled: {command.get_name()}")
@@ -18,9 +28,17 @@ class MockSkill:
 class FailingSkill:
     """Mock skill that always fails."""
     
+    def get_name(self) -> str:
+        return "fail"
+    
+    def can_handle(self, command: Command) -> bool:
+        return command.get_name() == "fail"
+    
+    def supported_commands(self) -> list[str]:
+        return ["fail"]
+    
     def handle(self, command: Command) -> CommandResult:
         return CommandResult(success=False, message="Skill failed")
-
 
 class TestAssistantService:
     """Tests for AssistantService."""
@@ -29,9 +47,11 @@ class TestAssistantService:
         """Test that AssistantService successfully handles a registered command."""
         # Arrange
         registry = SkillRegistry()
-        registry.register("echo", MockSkill())
-        service = AssistantService(registry)
-        command = Command(name="echo", slots={"text": "Hello"})
+        mock_skill = MockSkill()
+        registry.register(mock_skill)
+        scheduler = TaskScheduler(registry)
+        service = AssistantService(registry, scheduler)
+        command = Command(name="mock", slots={"text": "Hello"})
 
         # Act
         result = service.handle_command(command)
@@ -39,13 +59,14 @@ class TestAssistantService:
         # Assert
         assert isinstance(result, CommandResult)
         assert result.is_successful() is True
-        assert "Handled: echo" in result.get_message()
+        assert "Handled: mock" in result.get_message()
 
     def test_handle_command_not_found(self):
         """Test that AssistantService returns error for non-existent command."""
         # Arrange
         registry = SkillRegistry()
-        service = AssistantService(registry)
+        scheduler = TaskScheduler(registry)
+        service = AssistantService(registry, scheduler)
         command = Command(name="unknown", slots={})
 
         # Act
@@ -61,8 +82,10 @@ class TestAssistantService:
         """Test that AssistantService returns the skill's failure result."""
         # Arrange
         registry = SkillRegistry()
-        registry.register("fail", FailingSkill())
-        service = AssistantService(registry)
+        failing_skill = FailingSkill()
+        registry.register(failing_skill)
+        scheduler = TaskScheduler(registry)
+        service = AssistantService(registry, scheduler)
         command = Command(name="fail", slots={})
 
         # Act
@@ -77,7 +100,8 @@ class TestAssistantService:
         """Test that list_skills returns empty list when no skills registered."""
         # Arrange
         registry = SkillRegistry()
-        service = AssistantService(registry)
+        scheduler = TaskScheduler(registry)
+        service = AssistantService(registry, scheduler)
 
         # Act
         skills = service.list_skills()
@@ -89,10 +113,42 @@ class TestAssistantService:
         """Test that list_skills returns all registered skill names."""
         # Arrange
         registry = SkillRegistry()
-        registry.register("echo", MockSkill())
-        registry.register("time", MockSkill())
-        registry.register("weather", MockSkill())
-        service = AssistantService(registry)
+        
+        class EchoSkill:
+            def get_name(self) -> str:
+                return "echo"
+            def can_handle(self, command: Command) -> bool:
+                return command.get_name() == "echo"
+            def supported_commands(self) -> list[str]:
+                return ["echo"]
+            def handle(self, command: Command) -> CommandResult:
+                return CommandResult(success=True, message="echo")
+                
+        class TimeSkill:
+            def get_name(self) -> str:
+                return "time"
+            def can_handle(self, command: Command) -> bool:
+                return command.get_name() == "time"
+            def supported_commands(self) -> list[str]:
+                return ["time"]
+            def handle(self, command: Command) -> CommandResult:
+                return CommandResult(success=True, message="time")
+                
+        class WeatherSkill:
+            def get_name(self) -> str:
+                return "weather"
+            def can_handle(self, command: Command) -> bool:
+                return command.get_name() == "weather"
+            def supported_commands(self) -> list[str]:
+                return ["weather"]
+            def handle(self, command: Command) -> CommandResult:
+                return CommandResult(success=True, message="weather")
+        
+        registry.register(EchoSkill())
+        registry.register(TimeSkill())
+        registry.register(WeatherSkill())
+        scheduler = TaskScheduler(registry)
+        service = AssistantService(registry, scheduler)
 
         # Act
         skills = service.list_skills()
@@ -107,9 +163,31 @@ class TestAssistantService:
         """Test that the correct skill is selected for a command."""
         # Arrange
         registry = SkillRegistry()
-        registry.register("echo", MockSkill())
-        registry.register("time", MockSkill())
-        service = AssistantService(registry)
+        
+        class EchoSkill:
+            def get_name(self) -> str:
+                return "echo"
+            def can_handle(self, command: Command) -> bool:
+                return command.get_name() == "echo"
+            def supported_commands(self) -> list[str]:
+                return ["echo"]
+            def handle(self, command: Command) -> CommandResult:
+                return CommandResult(success=True, message="echo result")
+                
+        class TimeSkill:
+            def get_name(self) -> str:
+                return "time"
+            def can_handle(self, command: Command) -> bool:
+                return command.get_name() == "time"
+            def supported_commands(self) -> list[str]:
+                return ["time"]
+            def handle(self, command: Command) -> CommandResult:
+                return CommandResult(success=True, message="time result")
+        
+        registry.register(EchoSkill())
+        registry.register(TimeSkill())
+        scheduler = TaskScheduler(registry)
+        service = AssistantService(registry, scheduler)
         command = Command(name="time", slots={})
 
         # Act
@@ -117,4 +195,4 @@ class TestAssistantService:
 
         # Assert
         assert result.is_successful() is True
-        assert "time" in result.get_message()
+        assert "time result" in result.get_message()

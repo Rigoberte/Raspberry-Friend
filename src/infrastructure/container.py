@@ -1,4 +1,5 @@
 from src.application.services.skill_registry import SkillRegistry
+from src.application.services.task_scheduler import TaskScheduler
 from src.application.services.assistant_service import AssistantService
 
 from src.adapters.outbound.weather.real_weather_adapter import RealWeatherPort
@@ -18,4 +19,6 @@ def build_assistant() -> AssistantService:
     registry.register(MusicPlayerSkill(service=PygameMusicPlayerPort()))
     registry.register(FileExplorerSkill())
     
-    return AssistantService(registry)
+    scheduler = TaskScheduler()
+    
+    return AssistantService(registry, scheduler)

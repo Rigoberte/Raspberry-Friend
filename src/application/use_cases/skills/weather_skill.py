@@ -13,8 +13,8 @@ class WeatherSkill(RobotSkill):
     def __init__(self, service: WeatherPort):
         self.service = service
 
-    def can_handle(self, command: Command) -> bool:
-        return command.get_name() == "weather"
+    def supported_commands(self) -> list[str]:
+        return ["weather"]
 
     def handle(self, command: Command) -> CommandResult:
         city = command.get_args().get("text", "unknown location")
@@ -25,7 +25,7 @@ class WeatherSkill(RobotSkill):
             return CommandResult(success=False, message=f"Could not get weather for '{city}'. Error: {error_message}")
 
         weather_text = (
-            f"{city.title()} Weather:\n"
+            f"{weather_info['message']} Weather:\n"
             f"Temperature: {str(weather_info['temperature'])}°C (feels like {weather_info['apparent_temperature']}°C)\n"
             f"Precipitation probability: {weather_info['precipitation_probability']}%\n"
             f"Visibility: {weather_info['visibility']} m\n"
