@@ -24,11 +24,6 @@ class MockMusicPlayerPort(MusicPlayerPort):
                 return self.__apply_if_busy__(lambda: None)
             else:
                 return self.__change_song__(self.current_index)
-            
-            return {
-                "success": True,
-                "error-message": ""
-            }
         
         return {
             "success": False,

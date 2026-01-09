@@ -11,10 +11,8 @@ class WeatherSkill(RobotSkill):
     Handles 'weather' commands. For now, returns a placeholder response.
     """
     def __init__(self, service: WeatherPort):
+        super().__init__({"weather": "Get the current weather for a specified location."})
         self.service = service
-
-    def supported_commands(self) -> list[str]:
-        return ["weather"]
 
     def handle(self, command: Command) -> CommandResult:
         city = command.get_args().get("text", "unknown location")

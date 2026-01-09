@@ -13,6 +13,20 @@ class MusicPlayerSkill(RobotSkill):
     Handles 'music' commands. For now, returns a placeholder response.
     """
     def __init__(self, service: MusicPlayerPort):
+        super().__init__(
+            {
+                "play-song" : "Play a specified song.", 
+                "pause-song" : "Pause the current song.", 
+                "resume-song" : "Resume the paused song.", 
+                "rewind-song" : "Rewind the current song to the beginning.", 
+                "stop-song" : "Stop the current song.", 
+                "next-song" : "Play the next song in the playlist.", 
+                "previous-song" : "Play the previous song in the playlist.",
+                "add-to-playlist" : "Add a song to the playlist.",
+                "current-song" : "Get the currently playing song.",
+                "play-current-folder" : "Play all songs in the current folder."
+            }
+        )
         self.service = service
 
     def supported_commands(self) -> list[str]:

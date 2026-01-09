@@ -10,10 +10,16 @@ class FileExplorerSkill(RobotSkill):
     Handles 'list_files' commands to list files in a given directory.
     """
     def __init__(self):
+        super().__init__(
+            {
+                "list-files": "List files in the current directory or a specified directory.",
+                "ls": "List files in the current directory or a specified directory.",
+                "cd": "Change the current directory to a specified directory.",
+                "get-path": "Get the full path of a specified file or the current directory.",
+                "..": "Navigate up to the parent directory."
+            }
+        )
         self.__directory__ = ROOT  # Default directory
-
-    def supported_commands(self) -> list[str]:
-        return ["list-files", "..", "cd", "ls", "get-path"]
 
     def handle(self, command: Command) -> CommandResult:
         match command.get_name():
