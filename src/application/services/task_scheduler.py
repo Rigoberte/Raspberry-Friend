@@ -1,132 +1,263 @@
+import heapq
 import threading
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime, timezone, timedelta
 from concurrent.futures import ThreadPoolExecutor
+from typing import Optional
 
 from src.application.events.event_bus import EventBus
 from src.application.events.task_events import TaskQueued, TaskStarted, TaskCompleted, TaskFailed
-
-from src.domain.models.task import Task
 from src.application.services.command_dispatcher import CommandDispatcher
+from src.domain.models.task import Task
+
+@dataclass(frozen=True)
+class __HeapItem__:
+    run_at: datetime
+    neg_priority: int
+    seq: int
+    task_id: str
+    version: int  # para invalidar entradas viejas (lazy delete)
+
 
 class TaskScheduler:
-    def __init__(self, dispatcher: CommandDispatcher, event_bus: EventBus, max_workers: int) -> None:
+    def __init__(
+        self,
+        dispatcher: CommandDispatcher,
+        event_bus: EventBus,
+        max_workers: int = 5,
+    ) -> None:
         self._dispatcher = dispatcher
         self._event_bus = event_bus
-        self._tasks: list[Task] = [] 
 
-        self._lock = threading.Lock()  # Lock for thread-safe access
-        self._cv = threading.Condition(self._lock) 
-        
-        self._running = False  # Flag to control the background thread
-        self._thread = None  # Background thread reference
-        self._executor = ThreadPoolExecutor(max_workers=max_workers)  # For concurrent task execution
+        self._condition = threading.Condition()
+        self._is_running = False
+        self._thread: Optional[threading.Thread] = None
+        self._executor = ThreadPoolExecutor(max_workers=max_workers)
 
-        self.__start__()
+        self._tasks_by_id: dict[str, Task] = {}
+        self._cancelled_task_ids: set[str] = set()
 
-    def has_tasks(self) -> bool:
-        with self._lock:
-            return len(self._tasks) > 0
-    
-    def add_task(self, task: Task) -> None:
-        with self._cv:
-            self._tasks.append(task)
-            self._cv.notify()
+        self._heap: list[__HeapItem__] = []
+        self._task_version: dict[str, int] = {}
+        self._seq = 0
 
-        self._event_bus.publish(
-            TaskQueued(
-                task_id=task.get_id(), 
-                command_name=task.get_command().get_name(), 
-                occurred_at=datetime.now(timezone.utc)
-            )
-        )
+        self.start()
 
-    def remove_task(self, task: Task) -> None:
-        with self._cv:
-            if task in self._tasks:
-                self._tasks.remove(task)
-            self._cv.notify()
-    
-    def get_all_tasks(self) -> list[Task]:
-        with self._lock:
-            return list(self._tasks)
-    
+    def start(self) -> None:
+        with self._condition:
+            if self._is_running:
+                return
+
+            self._is_running = True
+            self._thread = threading.Thread(target=self.__run_loop__, daemon=True)
+            self._thread.start()
+
     def stop(self) -> None:
-        with self._cv:
-            self._running = False
-            self._cv.notify()
+        with self._condition:
+            self._is_running = False
+            self._condition.notify_all()
 
         if self._thread:
             self._thread.join(timeout=5.0)
             self._thread = None
 
-    def __start__(self) -> None:
-        if self._running:
-            return
+        self._executor.shutdown(wait=True, cancel_futures=False)
 
-        self._running = True
-        self._thread = threading.Thread(target=self.__run_loop__, daemon=True)
-        self._thread.start()
+    def has_tasks(self) -> bool:
+        with self._condition:
+            return bool(self._tasks_by_id)
+
+    def list_tasks(self) -> list[Task]:
+        with self._condition:
+            return list(self._tasks_by_id.values())
+
+    def add_task(self, task: Task) -> None:
+        task_id = task.get_id()
+
+        with self._condition:
+            self._tasks_by_id[task_id] = task
+            self._cancelled_task_ids.discard(task_id)
+
+            self._task_version[task_id] = self._task_version.get(task_id, 0)
+
+            self.__schedule_task__(task, now=self.__utcnow__())
+            self._condition.notify()
+
+        self.__publish_task_queued__(task)
+
+    def remove_task(self, task: Task) -> None:
+        task_id = task.get_id()
+        with self._condition:
+            self._cancelled_task_ids.add(task_id)
+            self._tasks_by_id.pop(task_id, None)
+            self._condition.notify()
 
     def __run_loop__(self) -> None:
         while True:
-            with self._cv:
-                if not self._running:
+            with self._condition:
+                if not self._is_running:
                     return
 
-                self._tasks = [t for t in self._tasks if not t.is_done()]
+                self.__discard_invalid_heap_tops__()
 
-                now = datetime.now(timezone.utc)
-                due: list[Task] = []
-                next_wakeup: datetime | None = None
+                if not self._heap:
+                    self._condition.wait()
+                    continue
 
-                for t in self._tasks:
-                    if t.should_execute(now):
-                        due.append(t)
-                    else:
-                        nra = t.next_run_at(now)
-                        if nra is not None:
-                            next_wakeup = nra if next_wakeup is None else min(next_wakeup, nra)
+                now = self.__utcnow__()
+                next_item = self._heap[0]
 
-                due.sort(key=lambda x: x._priority, reverse=True)
+                if next_item.run_at > now:
+                    timeout = (next_item.run_at - now).total_seconds()
+                    self._condition.wait(timeout=max(0.0, timeout))
+                    continue
 
-                for t in due:
-                    if t.try_claim():
-                        self._event_bus.publish(
-                            TaskStarted(
-                                task_id=t.get_id(),
-                                command_name=t.get_command().get_name(),
-                                occurred_at=datetime.now(timezone.utc)
-                            )
-                        )
-                        self._executor.submit(self.__execute_task__, t)
+                heapq.heappop(self._heap)
 
-                if not self._tasks:
-                    self._cv.wait()
-                else:
-                    if next_wakeup is None:
-                        self._cv.wait()
-                    else:
-                        timeout = max(0.0, (next_wakeup - now).total_seconds())
-                        self._cv.wait(timeout=timeout)
+                task = self._tasks_by_id.get(next_item.task_id)
+                if task is None:
+                    continue
+                if task.is_done():
+                    self.__drop_task__(next_item.task_id)
+                    continue
+
+                if not task.should_execute(now):
+                    self.__bump_version__(next_item.task_id)
+                    self.__schedule_task__(task, now=now)
+                    continue
+
+                if task.try_claim():
+                    self.__publish_task_started__(task)
+                    self._executor.submit(self.__execute_task__, task)
+
+    def __schedule_task__(self, task: Task, now: datetime) -> None:
+        task_id = task.get_id()
+
+        if task_id in self._cancelled_task_ids or task.is_done():
+            return
+
+        if task.should_execute(now):
+            run_at = now
+        else:
+            run_at = task.next_run_at(now)
+            if run_at is None:
+                return
+
+        priority = self.__task_priority__(task)
+        version = self._task_version.get(task_id, 0)
+
+        self._seq += 1
+        heapq.heappush(
+            self._heap,
+            __HeapItem__(
+                run_at=run_at,
+                neg_priority=-priority,
+                seq=self._seq,
+                task_id=task_id,
+                version=version,
+            ),
+        )
+
+    def __discard_invalid_heap_tops__(self) -> None:
+        while self._heap:
+            top = self._heap[0]
+            current_version = self._task_version.get(top.task_id)
+
+            if current_version is None or top.task_id in self._cancelled_task_ids:
+                heapq.heappop(self._heap)
+                continue
+
+            if top.version != current_version:
+                heapq.heappop(self._heap)
+                continue
+
+            task = self._tasks_by_id.get(top.task_id)
+            if task is None:
+                heapq.heappop(self._heap)
+                continue
+
+            if task.is_done():
+                heapq.heappop(self._heap)
+                self.__drop_task__(top.task_id)
+                continue
+
+            return
+
+    def __bump_version__(self, task_id: str) -> None:
+        self._task_version[task_id] = self._task_version.get(task_id, 0) + 1
+
+    def __drop_task__(self, task_id: str) -> None:
+        self._tasks_by_id.pop(task_id, None)
+        self._task_version.pop(task_id, None)
+        self._cancelled_task_ids.discard(task_id)
+
+    def __task_priority__(self, task: Task) -> int:
+        return int(getattr(task, "priority", getattr(task, "_priority", 0)))
 
     def __execute_task__(self, task: Task) -> None:
-        task.execute(self._dispatcher)
-        
-        result = task.get_result()
-        if result and result.is_successful():
-            self._event_bus.publish(TaskCompleted(
-                task_id=task.get_id(),
-                command_name=task.get_command().get_name(),
-                occurred_at=datetime.now(timezone.utc),
-                result=result,
-            ))
+        try:
+            task.execute(self._dispatcher)
+        except Exception:
+            result = task.get_result()
+            self.__publish_task_failed__(task, result)
         else:
-            self._event_bus.publish(TaskFailed(
+            result = task.get_result()
+            if result and result.is_successful():
+                self.__publish_task_completed__(task, result)
+            else:
+                self.__publish_task_failed__(task, result)
+        finally:
+            with self._condition:
+                task_id = task.get_id()
+
+                if task_id in self._cancelled_task_ids:
+                    self.__drop_task__(task_id)
+                elif task.is_done():
+                    self.__drop_task__(task_id)
+                else:
+                    self.__bump_version__(task_id)
+                    self.__schedule_task__(task, now=self.__utcnow__())
+
+                self._condition.notify()
+
+    def __publish_task_queued__(self, task: Task) -> None:
+        self._event_bus.publish(
+            TaskQueued(
                 task_id=task.get_id(),
                 command_name=task.get_command().get_name(),
-                occurred_at=datetime.now(timezone.utc),
-                result=result,
-            ))
+                occurred_at=self.__utcnow__(),
+            )
+        )
 
-        with self._cv: # Wake Scheduler
-            self._cv.notify()
+    def __publish_task_started__(self, task: Task) -> None:
+        self._event_bus.publish(
+            TaskStarted(
+                task_id=task.get_id(),
+                command_name=task.get_command().get_name(),
+                occurred_at=self.__utcnow__(),
+            )
+        )
+
+    def __publish_task_completed__(self, task: Task, result) -> None:
+        self._event_bus.publish(
+            TaskCompleted(
+                task_id=task.get_id(),
+                command_name=task.get_command().get_name(),
+                occurred_at=self.__utcnow__(),
+                result=result,
+            )
+        )
+
+    def __publish_task_failed__(self, task: Task, result) -> None:
+        self._event_bus.publish(
+            TaskFailed(
+                task_id=task.get_id(),
+                command_name=task.get_command().get_name(),
+                occurred_at=self.__utcnow__(),
+                result=result,
+            )
+        )
+
+    @staticmethod
+    def __utcnow__() -> datetime:
+        return datetime.now(timezone.utc)

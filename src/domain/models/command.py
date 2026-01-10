@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Mapping, Any, Optional
+from typing import Mapping, Any, Optional, Dict
 
 def normalize_command_name(name: str) -> str:
     return name.strip().lower()
@@ -20,15 +20,17 @@ class Command:
     def get_args(self) -> Mapping[str, Any]:
         return dict(self._args)
 
-@dataclass(frozen=True, slots=True)
 class CommandResult:
-    success: bool
-    message: str
-    code: str = "OK"
-    details: Optional[Any] = None
+    def __init__(self, success: bool, message: str, data: Optional[Dict[str, Any]] = None):
+        self._success = success
+        self._message = message
+        self._data = data or {}
 
     def is_successful(self) -> bool:
-        return bool(self.success)
+        return bool(self._success)
     
     def get_message(self) -> str:
-        return str(self.message)
+        return str(self._message)
+    
+    def get_data(self) -> Dict[str, Any]:
+        return dict(self._data)

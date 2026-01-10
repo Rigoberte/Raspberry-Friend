@@ -6,4 +6,4 @@ class WeatherPort(ABC):
     """
     @abstractmethod
     def get_weather(self, city: str) -> dict[str, float | int | bool | str]:
-        pass
+        raise NotImplementedError

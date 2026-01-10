@@ -1,6 +1,5 @@
 from src.domain.ports.outbound.music_player_ports import MusicPlayerPort
 import pygame
-import os
 
 try:
     from mutagen.mp3 import MP3
@@ -21,12 +20,6 @@ class PygameMusicPlayerPort(MusicPlayerPort):
             print(f"Failed to initialize the mixer: {e}")
 
     def play_song(self, song: str) -> dict[str, str | bool]:
-        if not os.path.isfile(song):
-            return {
-                "success": False,
-                "error-message": "File does not exist"
-            }
-        
         if self.is_busy():
             self.mixer.music.stop()
 
@@ -79,12 +72,6 @@ class PygameMusicPlayerPort(MusicPlayerPort):
         return self.playlist[self.current_index].title()
 
     def add_to_playlist(self, song: str) -> dict[str, str | bool]:
-        if not os.path.isfile(song):
-            return {
-                "success": False,
-                "error-message": "File does not exist"
-            }
-        
         self.playlist.append(song)
         return {
             "success": True,

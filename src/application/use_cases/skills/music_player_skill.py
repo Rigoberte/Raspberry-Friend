@@ -29,15 +29,6 @@ class MusicPlayerSkill(RobotSkill):
         )
         self.service = service
 
-    def supported_commands(self) -> list[str]:
-        return [
-            "play-song", "pause-song", "resume-song", 
-            "rewind-song", "stop-song", 
-            "next-song", "previous-song", 
-            "add-to-playlist", "current-song",
-            "play-current-folder"
-            ]
-    
     def handle(self, command: Command) -> CommandResult:
         match command.get_name():
             case "play-song":
@@ -65,31 +56,30 @@ class MusicPlayerSkill(RobotSkill):
                 command_result = self.__add_to_playlist__(command)
 
             case "current-song":
-                command_result = {
-                    "success": True,
-                    "message": f"Now playing: '{self.__current_song__()}'."
-                }
+                command_result = CommandResult(
+                    success=True,
+                    message=f"Now playing: '{self.__current_song__()}'."
+                )
 
             case "play-current-folder":
                 command_result = self.__play_current_folder__(command)
                 
-        success = command_result.get("success", False)
-        message = command_result.get("message", "No message provided")
-        
-        return CommandResult(success=success, message=message)
+        return command_result
     
-    def __play_song__(self, command: Command) -> dict[str, str | bool]:
-        song = command.get_args().get("text", "unknown song")
+    def __play_song__(self, command: Command) -> CommandResult:
+        path = command.get_args().get("path") or command.get_args().get("text", "")
+        if not path:
+            return CommandResult(False, "Usage: play-file <path>")
         
-        command_result = self.service.play_song(song)
+        command_result = self.service.play_song(path)
 
         return self.__handle_command_result__(
             command_result, 
-            success_message=f"", 
-            failure_message=f"Failed to play '{song}'"
+            success_message="", 
+            failure_message= "Failed to play song"
         )
 
-    def __pause_song__(self) -> dict[str, str | bool]:
+    def __pause_song__(self) -> CommandResult:
         command_result = self.service.pause_song()
 
         return self.__handle_command_result__(
@@ -98,7 +88,7 @@ class MusicPlayerSkill(RobotSkill):
             failure_message="Failed to pause song"
         )
     
-    def __resume_song__(self) -> dict[str, str | bool]:
+    def __resume_song__(self) -> CommandResult:
         command_result = self.service.resume_song()
         
         return self.__handle_command_result__(
@@ -107,7 +97,7 @@ class MusicPlayerSkill(RobotSkill):
             failure_message="Failed to resume song"
         )
     
-    def __rewind_song__(self) -> dict[str, str | bool]:
+    def __rewind_song__(self) -> CommandResult:
         command_result = self.service.rewind_song()
 
         return self.__handle_command_result__(
@@ -116,7 +106,7 @@ class MusicPlayerSkill(RobotSkill):
             failure_message="Failed to rewind song"
         )
 
-    def __stop_song__(self) -> dict[str, str | bool]:
+    def __stop_song__(self) -> CommandResult:
         command_result = self.service.stop_song()
         
         return self.__handle_command_result__(
@@ -125,7 +115,7 @@ class MusicPlayerSkill(RobotSkill):
             failure_message="Failed to stop song"
         )
     
-    def __next_song__(self) -> dict[str, str | bool]:
+    def __next_song__(self) -> CommandResult:
         command_result = self.service.next_song()
 
         return self.__handle_command_result__(
@@ -134,7 +124,7 @@ class MusicPlayerSkill(RobotSkill):
             failure_message="Failed to skip to next song"
         )
     
-    def __previous_song__(self) -> dict[str, str | bool]:
+    def __previous_song__(self) -> CommandResult:
         command_result = self.service.previous_song()
 
         return self.__handle_command_result__(
@@ -143,7 +133,7 @@ class MusicPlayerSkill(RobotSkill):
             failure_message="Failed to skip to previous song"
         )
     
-    def __add_to_playlist__(self, command: Command) -> dict[str, str | bool]:
+    def __add_to_playlist__(self, command: Command) -> CommandResult:
         song = command.get_args().get("text", "unknown song")
 
         command_result = self.service.add_to_playlist(song)
@@ -157,31 +147,44 @@ class MusicPlayerSkill(RobotSkill):
     def __current_song__(self) -> str:
         return self.service.current_song()
     
-    def __play_current_folder__(self, command: Command) -> dict[str, str | bool]:
+    def __play_current_folder__(self, command: Command) -> CommandResult:
         raise NotImplementedError("play-current-folder command is not yet implemented.")
 
     def __get_pos__(self) -> int:
         return self.service.get_pos()
     
-    def __handle_command_result__(self, command_result: dict[str, str | bool], success_message: str, failure_message: str) -> dict[str, str | bool]:
+    def __handle_command_result__(self, command_result: dict[str, str | bool], success_message: str, failure_message: str) -> CommandResult:
         if not command_result.get("success", False):
-            return {
-                "success": False, 
-                "message": f"{failure_message}. Error: {command_result.get('message', 'Unknown error')}"
-            }
+            return self.__build_failure_result__(command_result, failure_message)
+        
+        return self.__build_success_result__(command_result, success_message)
+    
+    def __build_success_result__(self, command_result: dict[str, str | bool], success_message: str) -> CommandResult:
+        duration_s = float(command_result.get("duration", 0) or 0)
+        file_path = str(command_result.get("file", command_result))
+        track = os.path.basename(file_path)
         
         time.sleep(0.1)  # brief pause to ensure state is updated
         if self.service.is_busy():
             current_song = os.path.basename(self.service.current_song())
 
-            return {
-                "success": True, 
-                "message": success_message + ". " if success_message else "" + f"Now playing '{current_song}'.",
-                "duration": command_result.get("duration", 0),
-                "file": command_result.get("file", "")
-            }
+            return CommandResult(
+                success=True, 
+                message=success_message + ". " if success_message else "" + f"Now playing '{current_song}'.",
+                data={
+                    "path": file_path,
+                    "track": track,
+                    "duration_s": duration_s,
+                }
+            )
 
-        return {
-            "success": True, 
-            "message": success_message
-        }
+        return CommandResult(
+            success=True, 
+            message=success_message
+        )
+    
+    def __build_failure_result__(self, command_result: dict[str, str | bool], failure_message: str) -> CommandResult:
+        return CommandResult(
+            success=False,
+            message=f"{failure_message}. Error: {command_result.get('error-message', 'Unknown error')}"
+        )

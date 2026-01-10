@@ -15,7 +15,7 @@ class RobotSkill(ABC):
     def handle(self, command: Command) -> CommandResult:
         raise NotImplementedError()
 
-class NullSkill(RobotSkill):
+class UnknownSkill(RobotSkill):
     def __init__(self) -> None:
         super().__init__({})
 

@@ -11,19 +11,20 @@ from src.application.events.event_bus import InMemoryEventBus
 from src.application.events.task_events import TaskCompleted, TaskFailed, TaskQueued, TaskStarted
 from src.application.services.task_event_logger import TaskEventLogger
 from src.adapters.outbound.logger.console_logger_adapter import ConsoleLoggerAdapter
+from src.application.services.task_event_logger import LoggerLevel
 
 def main():
-    bus = InMemoryEventBus()
+    events_bus = InMemoryEventBus()
 
-    output_logger = ConsoleLoggerAdapter(level="DEBUG")
+    output_logger = ConsoleLoggerAdapter(level=LoggerLevel.DEBUG)
     event_logger = TaskEventLogger(output_logger)
 
-    bus.subscribe(TaskQueued, event_logger.on_task_queued)
-    bus.subscribe(TaskStarted, event_logger.on_task_started)
-    bus.subscribe(TaskCompleted, event_logger.on_task_completed)
-    bus.subscribe(TaskFailed, event_logger.on_task_failed)
+    events_bus.subscribe(TaskQueued, event_logger.on_task_queued)
+    events_bus.subscribe(TaskStarted, event_logger.on_task_started)
+    events_bus.subscribe(TaskCompleted, event_logger.on_task_completed)
+    events_bus.subscribe(TaskFailed, event_logger.on_task_failed)
 
-    assistant = build_assistant(event_bus=bus)
+    assistant = build_assistant(event_bus=events_bus)
     print("Welcome to Raspberry-Friend CLI! Type 'exit' to quit.")
 
     session = PromptSession()
@@ -31,7 +32,7 @@ def main():
     try:
         with patch_stdout():
             while True:
-                user_input = session.prompt("> ").strip()
+                user_input = str(session.prompt("> ")).strip()
                 if not user_input:
                     continue
 
@@ -48,7 +49,7 @@ def main():
 
     finally:
         assistant.stop()
-        bus.stop()
+        events_bus.stop()
 
 if __name__ == "__main__":
     sys.path.append(str(Path(__file__).parent.parent.resolve()))

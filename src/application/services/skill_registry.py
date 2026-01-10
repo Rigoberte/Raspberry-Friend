@@ -1,5 +1,5 @@
 from src.domain.models.command import Command
-from src.application.use_cases.skills.skill import RobotSkill, NullSkill
+from src.application.use_cases.skills.skill import RobotSkill, UnknownSkill
 
 class SkillRegistry:
     def __init__(self) -> None:
@@ -12,7 +12,7 @@ class SkillRegistry:
             self._by_command[command] = skill
     
     def get_skill(self, command: Command) -> RobotSkill: # TODO: Remove getter
-        return self._by_command.get(command.get_name(), NullSkill())
+        return self._by_command.get(command.get_name(), UnknownSkill())
     
     def list_skills(self) -> list[str]:
         return sorted(self._by_command.keys())

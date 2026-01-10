@@ -6,44 +6,44 @@ class MusicPlayerPort(ABC):
     """
     @abstractmethod
     def play_song(self, song: str) -> dict[str, str | int]:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def pause_song(self) -> dict[str, str | bool]:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def resume_song(self) -> dict[str, str | bool]:
-        pass
-
+        raise NotImplementedError
+    
     @abstractmethod
     def stop_song(self) -> dict[str, str | bool]:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def rewind_song(self) -> dict[str, str | bool]:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def next_song(self) -> dict[str, str | bool]:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def previous_song(self) -> dict[str, str | bool]:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def add_to_playlist(self, song: str) -> dict[str, str | bool]:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def current_song(self) -> str:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def get_pos(self) -> int:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def is_busy(self) -> bool:
-        pass
+        raise NotImplementedError

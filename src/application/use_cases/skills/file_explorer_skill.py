@@ -1,4 +1,5 @@
 import os
+import threading
 
 from .skill import RobotSkill
 from src.domain.models.command import Command, CommandResult
@@ -16,10 +17,13 @@ class FileExplorerSkill(RobotSkill):
                 "ls": "List files in the current directory or a specified directory.",
                 "cd": "Change the current directory to a specified directory.",
                 "get-path": "Get the full path of a specified file or the current directory.",
+                "select-file": "Select a file in current directory and return its full path (for workflows).",
+                "find-song": "Find an mp3 by name under user_data and return the path.",
                 "..": "Navigate up to the parent directory."
             }
         )
-        self.__directory__ = ROOT  # Default directory
+        self._directory = ROOT  # Default directory
+        self._lock = threading.Lock()
 
     def handle(self, command: Command) -> CommandResult:
         match command.get_name():
@@ -29,19 +33,24 @@ class FileExplorerSkill(RobotSkill):
                 return self.__cd__(command)
             case "get-path":
                 return self.__get_path__(command)
+            case "select-file":
+                return self.__select_file__(command)
+            case "find-song":
+                return self.__find_song__(command)
             case "..":
                 return self.__navigate_up__()
     
     def __list_files__(self, command: Command) -> CommandResult:
         command_text = command.get_args().get("text", "")
         if command_text != "":
-            new_directory = os.path.join(self.__directory__, command_text)
+            new_directory = os.path.join(self._directory, command_text)
         else:
-            new_directory = self.__directory__
+            new_directory = self._directory
         
         try:
             files = os.listdir(new_directory)
-            self.__directory__ = new_directory
+            with self._lock:
+                self._directory = new_directory
             
             if not files:
                 return CommandResult(success=True, message=f"No files found in directory '{new_directory}'.")
@@ -51,7 +60,15 @@ class FileExplorerSkill(RobotSkill):
 
             file_list = ".. to navigate up\n" + folders_list + ("\n" if folders_list and not_folders_list else "") + not_folders_list
 
-            return CommandResult(success=True, message=f"Files in '{new_directory}':\n{file_list}")
+            return CommandResult(
+                success=True, 
+                message=f"Files in '{new_directory}':\n{file_list}",
+                data={
+                    "cwd": new_directory,
+                    "folders": folders_list,
+                    "files": not_folders_list,
+                }
+            )
         except FileNotFoundError:
             return CommandResult(success=False, message=f"Directory '{new_directory}' not found.")
         except PermissionError:
@@ -60,13 +77,18 @@ class FileExplorerSkill(RobotSkill):
             return CommandResult(success=False, message=f"An error occurred: {str(e)}")
     
     def __navigate_up__(self) -> CommandResult:
-        if self.__directory__ == ROOT:
-            return CommandResult(success=False, message="Already at the root directory.")
-        
-        parent_directory = os.path.dirname(self.__directory__)
-        self.__directory__ = parent_directory
+        with self._lock:
+            if self._directory == ROOT:
+                return CommandResult(success=False, message="Already at the root directory.")
+            
+            parent_directory = os.path.dirname(self._directory)
+            self._directory = parent_directory
 
-        return CommandResult(success=True, message=f"Moved up to directory '{parent_directory}'.")
+        return CommandResult(
+            success=True, 
+            message=f"Moved up to directory '{parent_directory}'.",
+            data={"cwd": parent_directory}
+        )
     
     def __cd__(self, command: Command) -> CommandResult:
         command_text = command.get_args().get("text", "")
@@ -74,23 +96,64 @@ class FileExplorerSkill(RobotSkill):
         if command_text in [".", ".."]:
             return self.__navigate_up__()
         
-        new_directory = os.path.join(self.__directory__, command_text)
+        with self._lock:
+            base_dir = self._directory
+        new_directory = os.path.join(base_dir, command_text)
 
         if os.path.isdir(new_directory):
-            self.__directory__ = new_directory
-            return CommandResult(success=True, message=f"Changed directory to '{new_directory}'.")
+            with self._lock:
+                self._directory = new_directory
+            return CommandResult(success=True, message=f"Changed directory to '{new_directory}'.", data={"cwd": new_directory})
         else:
             return CommandResult(success=False, message=f"'{new_directory}' is not a valid directory.")
         
     def __get_path__(self, command: Command) -> CommandResult:
         file_name = command.get_args().get("text", "")
+        with self._lock:
+            cwd = self._directory
 
-        if file_name:
-            file_path = os.path.join(self.__directory__, file_name)
-            
-            if os.path.exists(file_path):
-                return CommandResult(success=True, message=f"Full path: '{file_path}'")
-            else:
-                return CommandResult(success=False, message=f"Directory '{file_name}' does not exist in '{self.__directory__}'.")
-        
-        return CommandResult(success=True, message=f"Current directory: '{self.__directory__}'")
+        if not file_name:
+            return CommandResult(True, f"Current directory: '{cwd}'", data={"path": cwd, "cwd": cwd})
+
+        file_path = os.path.join(cwd, file_name)
+        if os.path.exists(file_path):
+            return CommandResult(True, f"Full path: '{file_path}'", data={"path": file_path, "cwd": cwd})
+        return CommandResult(False, f"'{file_name}' does not exist in '{cwd}'.")
+    
+    def __select_file__(self, command: Command) -> CommandResult:
+        file_name = command.get_args().get("text", "")
+        if not file_name:
+            return CommandResult(False, "Usage: select-file <filename>")
+
+        with self._lock:
+            cwd = self._directory
+        file_path = os.path.join(cwd, file_name)
+
+        if not os.path.isfile(file_path):
+            return CommandResult(False, f"'{file_name}' is not a file in '{cwd}'.")
+
+        return CommandResult(True, f"Selected: {file_name}", data={"path": file_path, "cwd": cwd})
+
+    def __find_song__(self, command: Command) -> CommandResult:
+        query = (command.get_args().get("text", "") or "").strip().lower()
+        if not query:
+            return CommandResult(False, "Usage: find-song <partial-song-name>")
+
+        matches: list[str] = []
+        for dirpath, _, filenames in os.walk(ROOT):
+            for fn in filenames:
+                low = fn.lower()
+                if low.endswith(".mp3") and query in low:
+                    matches.append(os.path.join(dirpath, fn))
+
+        if not matches:
+            return CommandResult(False, f"No mp3 found matching '{query}' under '{ROOT}'.")
+
+        # Heurística simple: el nombre más corto primero
+        matches.sort(key=lambda p: len(os.path.basename(p)))
+        best = matches[0]
+
+        return CommandResult(True, f"Found: {os.path.basename(best)}", data={
+            "path": best,
+            "matches": matches[:10],  # opcional
+        })

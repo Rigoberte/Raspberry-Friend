@@ -56,7 +56,7 @@ class AssistantService:
         return task
     
     def get_active_tasks(self) -> list[Task]:
-        return self._scheduler.get_all_tasks()
+        return self._scheduler.list_tasks()
     
     def list_skills(self) -> list[str]:
         return self._registry.list_skills()
