@@ -135,7 +135,8 @@ class FileExplorerSkill(RobotSkill):
         return CommandResult(True, f"Selected: {file_name}", data={"path": file_path, "cwd": cwd})
 
     def __find_song__(self, command: Command) -> CommandResult:
-        query = (command.get_args().get("text", "") or "").strip().lower()
+        query = os.path.basename(command.get_args().get("text", "") or "").strip().lower()
+        
         if not query:
             return CommandResult(False, "Usage: find-song <partial-song-name>")
 
@@ -149,11 +150,10 @@ class FileExplorerSkill(RobotSkill):
         if not matches:
             return CommandResult(False, f"No mp3 found matching '{query}' under '{ROOT}'.")
 
-        # Heurística simple: el nombre más corto primero
         matches.sort(key=lambda p: len(os.path.basename(p)))
         best = matches[0]
 
         return CommandResult(True, f"Found: {os.path.basename(best)}", data={
             "path": best,
-            "matches": matches[:10],  # opcional
+            "matches": matches
         })

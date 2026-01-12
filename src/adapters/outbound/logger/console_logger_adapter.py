@@ -17,6 +17,9 @@ class ConsoleLoggerAdapter(LoggerPort):
     def __fmt__(self, level: str, message: str, extra: Optional[Mapping[str, Any]]) -> str:
         if extra:
             extras = " ".join(f"{k}={v}" for k, v in extra.items())
+
+            if message.endswith("\n"):
+                return f"{level} {message}({extras})\n"
             return f"{level} {message} ({extras})"
         return f"{level} {message}"
     

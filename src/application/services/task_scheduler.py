@@ -10,7 +10,7 @@ from src.application.events.task_events import TaskQueued, TaskStarted, TaskComp
 from src.application.services.command_dispatcher import CommandDispatcher
 from src.domain.models.task import Task
 
-@dataclass(frozen=True)
+@dataclass(order=True, frozen=True)
 class __HeapItem__:
     run_at: datetime
     neg_priority: int
@@ -49,7 +49,7 @@ class TaskScheduler:
                 return
 
             self._is_running = True
-            self._thread = threading.Thread(target=self.__run_loop__, daemon=True)
+            self._thread = threading.Thread(target=self.__run_loop__, daemon=False)
             self._thread.start()
 
     def stop(self) -> None:
@@ -58,7 +58,7 @@ class TaskScheduler:
             self._condition.notify_all()
 
         if self._thread:
-            self._thread.join(timeout=5.0)
+            self._thread.join()
             self._thread = None
 
         self._executor.shutdown(wait=True, cancel_futures=False)
@@ -260,4 +260,4 @@ class TaskScheduler:
 
     @staticmethod
     def __utcnow__() -> datetime:
-        return datetime.now(timezone.utc)
+        return datetime.now(timezone(timedelta(hours=-3)))

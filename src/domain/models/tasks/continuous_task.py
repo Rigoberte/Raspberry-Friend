@@ -1,10 +1,9 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Callable
 import threading
 from src.domain.models.task import Task
 from src.domain.models.task_status import TaskStatus
 from src.domain.models.command import Command
-from src.application.use_cases.skills.skill import RobotSkill
 
 
 class ContinuousTask(Task):
@@ -24,7 +23,7 @@ class ContinuousTask(Task):
         super().__init__(command, priority)
         
         self._check_interval: timedelta = check_interval
-        self._next_execution: datetime = datetime.now() + check_interval
+        self._next_execution: datetime = datetime.now(timezone(timedelta(hours=-3))) + check_interval
         
         self._max_executions: int | None = max_executions
         self._execution_count: int = 0
@@ -46,10 +45,12 @@ class ContinuousTask(Task):
         if self._max_executions and self._execution_count >= self._max_executions:
             return False
         
-        if datetime.now() < self._next_execution:
+        now = datetime.now(timezone(timedelta(hours=-3)))
+        
+        if now < self._next_execution:
             return False
         
-        self._next_execution = datetime.now() + self._check_interval
+        self._next_execution = now + self._check_interval
         
         try:
             return self._condition_checker()
@@ -67,3 +68,6 @@ class ContinuousTask(Task):
         else:
             self._status = TaskStatus.PENDING
             self._execution_event.clear()
+
+    def get_type_of_task(self) -> str:
+        return "Continuous Task"

@@ -2,7 +2,6 @@ from pathlib import Path
 import json
 from rapidfuzz import process, fuzz
 
-
 DEFAULT_KEYS = [
     "city", "latitude", "longitude", "country", "iso2", "iso3", "admin_name", "complete_city_name"
 ]

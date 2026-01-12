@@ -1,9 +1,8 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import threading
 from src.domain.models.task import Task
 from src.domain.models.task_status import TaskStatus
-from src.domain.models.command import Command, CommandResult
-from src.application.use_cases.skills.skill import RobotSkill
+from src.domain.models.command import Command
 
 
 class RecurringTask(Task):
@@ -21,29 +20,32 @@ class RecurringTask(Task):
         super().__init__(command, priority)
 
         self._check_interval: timedelta = check_interval
-        self._next_execution: datetime = datetime.now() + check_interval
+        self._next_execution: datetime = datetime.now(timezone(timedelta(hours=-3))) + check_interval
         
         self._max_executions: int | None = max_executions
         self._execution_count: int = 0
 
         self._execution_event = threading.Event()  # Signals each execution
     
-    def should_execute(self) -> bool:
+    def should_execute(self, now: datetime) -> bool:
         if self._max_executions and self._execution_count >= self._max_executions:
             return False
-        return datetime.now() >= self._next_execution and self.is_pending()
+        return now >= self._next_execution and self.is_pending()
+    
+    def next_run_at(self, now: datetime) -> datetime | None:
+        if self._max_executions and self._execution_count >= self._max_executions:
+            return None
+        return self._next_execution if self.is_pending() else None
     
     def on_execution_complete(self) -> None:
         self._execution_count += 1
-        self._execution_event.set()  # Signal this execution is done
-        
-        # Check if we've reached max executions
         if self._max_executions and self._execution_count >= self._max_executions:
             self._status = TaskStatus.COMPLETED
-            self._done_event.set()  # Signal final completion
+            self._done_event.set()  # Signal that task is done
         else:
-            # Schedule next execution
-            self._next_execution = datetime.now() + self._check_interval
             self._status = TaskStatus.PENDING
-            # Clear execution event for next round
-            self._execution_event.clear()
+            self._next_execution = datetime.now(timezone(timedelta(hours=-3))) + self._check_interval
+            self._execution_event.set()  # Signal that execution occurred
+
+    def get_type_of_task(self) -> str:
+        return "Recurring Task"

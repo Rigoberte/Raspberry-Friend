@@ -25,3 +25,6 @@ class ScheduledTask(Task):
     def on_execution_complete(self) -> None:
         self._status = TaskStatus.COMPLETED
         self._done_event.set()  # Signal that task is done
+
+    def get_type_of_task(self) -> str:
+        return "Scheduled Task"

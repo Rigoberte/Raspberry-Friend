@@ -39,7 +39,7 @@ class InMemoryEventBus(EventBus):
 
         self._q: Queue[object] = Queue()
         self._running = True
-        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread = threading.Thread(target=self._loop, daemon=False)
         self._thread.start()
 
     def subscribe(self, event_type: Type[T], handler: Callable[[T], None]) -> None:
@@ -69,4 +69,4 @@ class InMemoryEventBus(EventBus):
 
     def stop(self) -> None:
         self._running = False
-        self._thread.join(timeout=2.0)
+        self._thread.join()

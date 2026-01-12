@@ -1,8 +1,9 @@
 import sys
+import os
 from pathlib import Path
 import colorama
 from prompt_toolkit import PromptSession
-from prompt_toolkit.patch_stdout import patch_stdout
+import time
 
 from src.infrastructure.container import build_assistant
 from src.domain.models.command import Command
@@ -30,26 +31,27 @@ def main():
     session = PromptSession()
     
     try:
-        with patch_stdout():
-            while True:
-                user_input = str(session.prompt("> ")).strip()
-                if not user_input:
-                    continue
+        while True:
+            user_input = str(session.prompt("> ")).strip()
+            if not user_input:
+                continue
 
-                if user_input.lower() in ("exit", "quit"):
-                    break
+            if user_input.lower() in ("exit", "quit"):
+                break
 
-                parts = user_input.split(maxsplit=1)
-                name = parts[0]
-                args = {"text": parts[1]} if len(parts) > 1 else {}
+            parts = user_input.split(maxsplit=1)
+            name = parts[0]
+            args = {"text": parts[1]} if len(parts) > 1 else {}
 
-                command = Command(name, args)
+            command = Command(name, args)
 
-                assistant.handle_command(command)
+            assistant.handle_command(command)
 
     finally:
         assistant.stop()
         events_bus.stop()
+        if sys.platform.startswith("win"):
+            os._exit(0)
 
 if __name__ == "__main__":
     sys.path.append(str(Path(__file__).parent.parent.resolve()))

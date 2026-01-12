@@ -1,5 +1,5 @@
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from src.domain.ports.outbound.weather_ports import WeatherPort
 from src.adapters.outbound.weather.cities_info_adapter import CitiesInfoAdapter
 
@@ -51,7 +51,7 @@ class RealWeatherPort(WeatherPort):
             data = r.json()
 
             # Current UTC hour as aware datetime
-            now_utc = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+            now_utc = datetime.now(timezone(timedelta(hours=-3))).replace(minute=0, second=0, microsecond=0)
             times = data["hourly"]["time"]
 
             # Find closest hour index, making API times aware UTC

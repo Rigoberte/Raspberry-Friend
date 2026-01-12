@@ -15,7 +15,7 @@ class MusicPlayerSkill(RobotSkill):
     def __init__(self, service: MusicPlayerPort):
         super().__init__(
             {
-                "play-song" : "Play a specified song.", 
+                "play-mp3" : "Play a specified mp3 song.", 
                 "pause-song" : "Pause the current song.", 
                 "resume-song" : "Resume the paused song.", 
                 "rewind-song" : "Rewind the current song to the beginning.", 
@@ -31,7 +31,7 @@ class MusicPlayerSkill(RobotSkill):
 
     def handle(self, command: Command) -> CommandResult:
         match command.get_name():
-            case "play-song":
+            case "play-mp3":
                 command_result = self.__play_song__(command)
             
             case "pause-song":

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from uuid import uuid4
 import threading
-from datetime import datetime 
+from datetime import datetime, timezone, timedelta
 
 from src.domain.models.command import Command, CommandResult
 from src.domain.models.task_status import TaskStatus
@@ -19,7 +19,7 @@ class Task(ABC):
         self._done_event = threading.Event() 
         self._state_lock = threading.Lock()
 
-        self._created_at: datetime = datetime.now()
+        self._created_at: datetime = datetime.now(timezone(timedelta(hours=-3)))
 
     @abstractmethod
     def should_execute(self, now: datetime) -> bool:
@@ -39,6 +39,13 @@ class Task(ABC):
         """
         Called after task execution completes.
         Each task type defines what happens next (complete, reschedule, etc.)
+        """
+        raise NotImplementedError()
+    
+    @abstractmethod
+    def get_type_of_task(self) -> str:
+        """
+        Returns a string representing the type of the task.
         """
         raise NotImplementedError()
     
