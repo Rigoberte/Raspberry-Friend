@@ -7,21 +7,13 @@ from typing import Callable, DefaultDict, Type, TypeVar
 from collections import defaultdict
 import traceback
 
+from src.domain.ports.outbound.event_bus_ports import EventBusPort
+
 T = TypeVar("T")
 
 Handler = Callable[[object], None]
 
-class EventBus:
-    def publish(self, event: object) -> None:
-        raise NotImplementedError
-
-    def subscribe(self, event_type: Type[T], handler: Callable[[T], None]) -> None:
-        raise NotImplementedError
-
-    def stop(self) -> None:
-        raise NotImplementedError
-    
-class NoOpEventBus(EventBus):
+class NoOpEventBus(EventBusPort):
     def publish(self, event: object) -> None:
         return
 
@@ -32,7 +24,7 @@ class NoOpEventBus(EventBus):
         return
 
 
-class InMemoryEventBus(EventBus):
+class InMemoryEventBus(EventBusPort):
     def __init__(self) -> None:
         self._handlers: DefaultDict[type, list[Handler]] = defaultdict(list)
         self._lock = threading.Lock()

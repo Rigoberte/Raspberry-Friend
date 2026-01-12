@@ -2,11 +2,11 @@ import heapq
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
-from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
-from src.application.events.event_bus import EventBus
-from src.application.events.task_events import TaskQueued, TaskStarted, TaskCompleted, TaskFailed
+from src.domain.ports.outbound.event_bus_ports import EventBusPort
+from src.domain.ports.outbound.task_executor_ports import TaskExecutorPort
+from src.domain.events.task_events import TaskQueued
 from src.application.services.command_dispatcher import CommandDispatcher
 from src.domain.models.task import Task
 
@@ -16,23 +16,23 @@ class __HeapItem__:
     neg_priority: int
     seq: int
     task_id: str
-    version: int  # para invalidar entradas viejas (lazy delete)
+    version: int
 
 
 class TaskScheduler:
     def __init__(
         self,
         dispatcher: CommandDispatcher,
-        event_bus: EventBus,
-        max_workers: int = 5,
+        event_bus: EventBusPort,
+        executor: TaskExecutorPort,
     ) -> None:
         self._dispatcher = dispatcher
         self._event_bus = event_bus
+        self._executor = executor
 
         self._condition = threading.Condition()
         self._is_running = False
         self._thread: Optional[threading.Thread] = None
-        self._executor = ThreadPoolExecutor(max_workers=max_workers)
 
         self._tasks_by_id: dict[str, Task] = {}
         self._cancelled_task_ids: set[str] = set()
@@ -80,10 +80,16 @@ class TaskScheduler:
 
             self._task_version[task_id] = self._task_version.get(task_id, 0)
 
-            self.__schedule_task__(task, now=self.__utcnow__())
+            self.__schedule_task__(task, now=self.__datetime_now__())
             self._condition.notify()
 
-        self.__publish_task_queued__(task)
+        self._event_bus.publish( 
+            TaskQueued(
+                task_id=task.get_id(),
+                command_name=task.get_command().get_name(),
+                occurred_at=self.__datetime_now__(),
+            )
+        )
 
     def remove_task(self, task: Task) -> None:
         task_id = task.get_id()
@@ -104,7 +110,7 @@ class TaskScheduler:
                     self._condition.wait()
                     continue
 
-                now = self.__utcnow__()
+                now = self.__datetime_now__()
                 next_item = self._heap[0]
 
                 if next_item.run_at > now:
@@ -127,7 +133,6 @@ class TaskScheduler:
                     continue
 
                 if task.try_claim():
-                    self.__publish_task_started__(task)
                     self._executor.submit(self.__execute_task__, task)
 
     def __schedule_task__(self, task: Task, now: datetime) -> None:
@@ -197,16 +202,14 @@ class TaskScheduler:
     def __execute_task__(self, task: Task) -> None:
         try:
             task.execute(self._dispatcher)
-        except Exception:
-            result = task.get_result()
-            self.__publish_task_failed__(task, result)
-        else:
-            result = task.get_result()
-            if result and result.is_successful():
-                self.__publish_task_completed__(task, result)
-            else:
-                self.__publish_task_failed__(task, result)
+        except Exception as e:
+            pass
         finally:
+            domain_events = task.collect_domain_events()
+            
+            for event in domain_events:
+                self._event_bus.publish(event)
+            
             with self._condition:
                 task_id = task.get_id()
 
@@ -216,48 +219,10 @@ class TaskScheduler:
                     self.__drop_task__(task_id)
                 else:
                     self.__bump_version__(task_id)
-                    self.__schedule_task__(task, now=self.__utcnow__())
+                    self.__schedule_task__(task, now=self.__datetime_now__())
 
                 self._condition.notify()
 
-    def __publish_task_queued__(self, task: Task) -> None:
-        self._event_bus.publish(
-            TaskQueued(
-                task_id=task.get_id(),
-                command_name=task.get_command().get_name(),
-                occurred_at=self.__utcnow__(),
-            )
-        )
-
-    def __publish_task_started__(self, task: Task) -> None:
-        self._event_bus.publish(
-            TaskStarted(
-                task_id=task.get_id(),
-                command_name=task.get_command().get_name(),
-                occurred_at=self.__utcnow__(),
-            )
-        )
-
-    def __publish_task_completed__(self, task: Task, result) -> None:
-        self._event_bus.publish(
-            TaskCompleted(
-                task_id=task.get_id(),
-                command_name=task.get_command().get_name(),
-                occurred_at=self.__utcnow__(),
-                result=result,
-            )
-        )
-
-    def __publish_task_failed__(self, task: Task, result) -> None:
-        self._event_bus.publish(
-            TaskFailed(
-                task_id=task.get_id(),
-                command_name=task.get_command().get_name(),
-                occurred_at=self.__utcnow__(),
-                result=result,
-            )
-        )
-
     @staticmethod
-    def __utcnow__() -> datetime:
+    def __datetime_now__() -> datetime:
         return datetime.now(timezone(timedelta(hours=-3)))

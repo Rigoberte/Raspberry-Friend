@@ -99,7 +99,7 @@ class SchedulingPolicyParser:
                 s = int(parts[2]) if len(parts) > 2 else 0
 
         scheduled_datetime = scheduled_day.replace(
-            hour=h, minute=m, second=s, microsecond=0, tzinfo=timezone.utc
+            hour=h, minute=m, second=s, microsecond=0, tzinfo=timezone(timedelta(hours=-3))
         )
 
         if scheduled_datetime < now:

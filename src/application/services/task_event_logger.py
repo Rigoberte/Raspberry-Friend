@@ -1,7 +1,7 @@
 from __future__ import annotations
 from enum import IntEnum
 from src.domain.ports.outbound.logger_ports import LoggerPort
-from src.application.events.task_events import TaskCompleted, TaskFailed, TaskQueued, TaskStarted, TaskEvent
+from src.domain.events.task_events import TaskCompleted, TaskFailed, TaskQueued, TaskStarted, TaskEvent
 
 class LoggerLevel(IntEnum):
     DEBUG = 1
@@ -28,24 +28,25 @@ class TaskEventLogger:
         )
 
     def on_task_completed(self, ev: TaskCompleted) -> None:
-        msg = self.__common_format__(ev)
+        time = ev.occurred_at.strftime("%H:%M:%S")
+        msg = ev.message if ev.message else "completed successfully"
+        
+        if msg.find("\n") != -1:
+            msg = "\n" + msg + "\n"
+        
         self._logger.info(
-            message=f"✅ {msg}",
+            message=f"✅ [{time}] {msg}",
             extra={"task_id": ev.task_id}
         )
 
     def on_task_failed(self, ev: TaskFailed) -> None:
-        msg = self.__common_format__(ev)
-        self._logger.error(
-            message=f"❌ {msg}",
-            extra={"task_id": ev.task_id}
-        )
-
-    def __common_format__(self, ev: TaskCompleted | TaskFailed) -> str:
-        msg = ev.result.get_message() if ev.result else "no result"
+        time = ev.occurred_at.strftime("%H:%M:%S")
+        msg = ev.error_message if ev.error_message else "task failed"
+        
         if msg.find("\n") != -1:
             msg = "\n" + msg + "\n"
         
-        time = ev.occurred_at.strftime("%H:%M:%S")
-
-        return f"[{time}] {msg}"
+        self._logger.error(
+            message=f"❌ [{time}] {msg}",
+            extra={"task_id": ev.task_id}
+        )

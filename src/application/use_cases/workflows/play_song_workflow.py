@@ -1,6 +1,6 @@
 from src.domain.models.command import Command
-from src.domain.models.workflows.WorkFlowStep import WorkflowStep
-from src.domain.models.workflows.WorkflowTask import WorkflowTask
+from src.domain.models.workflows.workflow_step import WorkflowStep
+from src.domain.models.workflows.workflow_task import WorkflowTask
 
 def build_play_song_workflow(command: Command) -> WorkflowTask:
     song_name = command.get_args().get("text", "")

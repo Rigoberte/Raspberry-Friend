@@ -3,7 +3,7 @@ Integration tests for full application flow.
 """
 
 import pytest
-from src.infrastructure.container import build_assistant
+from src.adapters.container import build_assistant
 from src.domain.models.command import Command, CommandResult
 
 

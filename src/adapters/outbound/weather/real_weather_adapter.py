@@ -57,7 +57,7 @@ class RealWeatherPort(WeatherPort):
             # Find closest hour index, making API times aware UTC
             closest_idx = min(
                 range(len(times)),
-                key=lambda i: abs(datetime.fromisoformat(times[i]).replace(tzinfo=timezone.utc) - now_utc)
+                key=lambda i: abs(datetime.fromisoformat(times[i]).replace(tzinfo=timezone(timedelta(hours=-3))) - now_utc)
             )
 
             hourly = data["hourly"]

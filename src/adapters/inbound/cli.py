@@ -3,13 +3,12 @@ import os
 from pathlib import Path
 import colorama
 from prompt_toolkit import PromptSession
-import time
 
-from src.infrastructure.container import build_assistant
+from src.adapters.container import build_assistant
 from src.domain.models.command import Command
 
 from src.application.events.event_bus import InMemoryEventBus
-from src.application.events.task_events import TaskCompleted, TaskFailed, TaskQueued, TaskStarted
+from src.domain.events.task_events import TaskCompleted, TaskFailed, TaskQueued, TaskStarted
 from src.application.services.task_event_logger import TaskEventLogger
 from src.adapters.outbound.logger.console_logger_adapter import ConsoleLoggerAdapter
 from src.application.services.task_event_logger import LoggerLevel

@@ -2,10 +2,20 @@ from abc import ABC, abstractmethod
 from uuid import uuid4
 import threading
 from datetime import datetime, timezone, timedelta
+from typing import Protocol
 
 from src.domain.models.command import Command, CommandResult
 from src.domain.models.task_status import TaskStatus
-from src.application.services.command_dispatcher import CommandDispatcher
+from src.domain.events.task_events import (
+    TaskQueued,
+    TaskStarted,
+    TaskCompleted,
+    TaskFailed,
+    TaskCancelled
+)
+
+class CommandHandler(Protocol):
+    def handle(self, command: Command) -> CommandResult: ...
 
 class Task(ABC):
     def __init__(self, command: Command, priority: int = 0) -> None:
@@ -20,6 +30,8 @@ class Task(ABC):
         self._state_lock = threading.Lock()
 
         self._created_at: datetime = datetime.now(timezone(timedelta(hours=-3)))
+        
+        self._domain_events: list = []
 
     @abstractmethod
     def should_execute(self, now: datetime) -> bool:
@@ -57,11 +69,27 @@ class Task(ABC):
     
     def get_result(self) -> CommandResult:
         return self._result
+    
+    def collect_domain_events(self) -> list:
+        events = self._domain_events.copy()
+        self._domain_events.clear()
+        return events
+    
+    def _emit_event(self, event) -> None:
+        self._domain_events.append(event)
 
-    def execute(self, dispatcher: CommandDispatcher) -> None:
+    def execute(self, dispatcher: CommandHandler) -> None:
         with self._state_lock:
             if self._status != TaskStatus.EXECUTING:
                 return
+        
+        self._emit_event(
+            TaskStarted(
+                task_id=self._id,
+                command_name=self._command.get_name(),
+                occurred_at=datetime.now(timezone(timedelta(hours=-3)))
+            )
+        )
         
         try:
             result = dispatcher.handle(self._command)
@@ -69,6 +97,17 @@ class Task(ABC):
 
             if result.is_successful():
                 self.on_execution_complete()
+                
+                self._emit_event(
+                    TaskCompleted(
+                        task_id=self._id,
+                        command_name=self._command.get_name(),
+                        occurred_at=datetime.now(timezone(timedelta(hours=-3))),
+                        success=True,
+                        message=result.get_message(),
+                        output=result.get_data()
+                    )
+                )
             else:
                 self.__fail__(result)
         except Exception as e:
@@ -109,9 +148,28 @@ class Task(ABC):
             self._status = TaskStatus.CANCELLED
             self._result = CommandResult(False, "Task cancelled")
             self._done_event.set()
+            
+            self._emit_event(
+                TaskCancelled(
+                    task_id=self._id,
+                    command_name=self._command.get_name(),
+                    occurred_at=datetime.now(timezone(timedelta(hours=-3))),
+                    reason="Task cancelled by user"
+                )
+            )
 
     def __fail__(self, result: CommandResult) -> None:
         with self._state_lock:
             self._status = TaskStatus.FAILED
             self._result = result
             self._done_event.set()
+            
+            self._emit_event(
+                TaskFailed(
+                    task_id=self._id,
+                    command_name=self._command.get_name(),
+                    occurred_at=datetime.now(timezone(timedelta(hours=-3))),
+                    error_message=result.get_message() if result else "Unknown error",
+                    details={"success": False}
+                )
+            )
