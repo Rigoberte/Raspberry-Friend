@@ -1,9 +1,11 @@
 from src.domain.ports.outbound.music_player_ports import MusicPlayerPort
+from src.domain.ports.outbound.event_bus_ports import EventBusPort
 
 class MockMusicPlayerPort(MusicPlayerPort):
-    def __init__(self):
+    def __init__(self, event_bus: EventBusPort | None = None):
         self.current_index = 0
         self.playlist = []
+        self._event_bus = event_bus
 
     def play_song(self, song: str) -> dict[str, str | int]:
         if song == "non_existent.mp3":

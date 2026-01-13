@@ -1,4 +1,4 @@
-# Robot Companion – Architecture & Class Diagram (MVP → v0.1)
+# Raspberry Friend – Architecture & Class Diagram (MVP → v0.1)
 
 > Objetivo: diseño extensible, iterativo/incremental y orientado a TDD, con módulos (skills) independientes, siguiendo POO (objetos completos/válidos, Null Object, inmutables, encapsulamiento estricto), preparado para futuras interfaces (CLI, HTTP/API, móvil) y futura ejecución en Raspberry Pi.
 

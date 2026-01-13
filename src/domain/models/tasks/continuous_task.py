@@ -32,7 +32,7 @@ class ContinuousTask(Task):
         
         self._execution_event = threading.Event()  # Signals each execution
     
-    def should_execute(self) -> bool:
+    def should_execute(self, now: datetime) -> bool:
         """
         Execute if:
         1. It's time for the next check
@@ -44,9 +44,7 @@ class ContinuousTask(Task):
         
         if self._max_executions and self._execution_count >= self._max_executions:
             return False
-        
-        now = datetime.now(timezone(timedelta(hours=-3)))
-        
+
         if now < self._next_execution:
             return False
         
@@ -57,6 +55,9 @@ class ContinuousTask(Task):
         except Exception:
             # If condition checker fails, don't execute
             return False
+        
+    def next_run_at(self, now: datetime) -> datetime | None:
+        return now if self.is_pending() else None
     
     def on_execution_complete(self) -> None:
         self._execution_count += 1

@@ -14,27 +14,30 @@ class ConsoleLoggerAdapter(LoggerPort):
     def __should_print__(self, level: LoggerLevel) -> bool:
         return level >= self._level
 
-    def __fmt__(self, level: str, message: str, extra: Optional[Mapping[str, Any]]) -> str:
+    def __fmt__(self, level: str, message: str, replace: bool, extra: Optional[Mapping[str, Any]]) -> str:
+        extra_part = ""
         if extra:
-            extras = " ".join(f"{k}={v}" for k, v in extra.items())
+            extras = " ".join(f"{k}={v}" for k, v in extra.items())    
+            extra_part = f"({extras})"
+            
+        prefix = "\r" if replace else ""
+        
+        subfix = "\n" if "\n" in message else ""
 
-            if message.endswith("\n"):
-                return f"{level} {message}({extras})\n"
-            return f"{level} {message} ({extras})"
-        return f"{level} {message}"
+        return f"{prefix}{level} {message} {extra_part}{subfix}"
     
-    def debug(self, message: str, *, extra=None) -> None:
+    def debug(self, message: str, *, extra=None, replace=False) -> None:
         if self.__should_print__(LoggerLevel.DEBUG):
-            print_formatted_text(ANSI(self.__fmt__("[DEBUG]", message, extra)))
+            print_formatted_text(ANSI(self.__fmt__("[DEBUG]", message, replace, extra)))
 
-    def info(self, message: str, *, extra=None) -> None:
+    def info(self, message: str, *, extra=None, replace=False) -> None:
         if self.__should_print__(LoggerLevel.INFO):
-            print_formatted_text(ANSI(self.__fmt__("[INFO]", message, extra)))
+            print_formatted_text(ANSI(self.__fmt__("[INFO]", message, replace, extra)))
 
-    def warning(self, message: str, *, extra=None) -> None:
+    def warning(self, message: str, *, extra=None, replace=False) -> None:
         if self.__should_print__(LoggerLevel.WARNING):
-            print_formatted_text(ANSI(self.__fmt__("[WARN]", message, extra)))
-
-    def error(self, message: str, *, extra=None) -> None:
+            print_formatted_text(ANSI(self.__fmt__("[WARN]", message, replace, extra)))
+            
+    def error(self, message: str, *, extra=None, replace=False) -> None:
         if self.__should_print__(LoggerLevel.ERROR):
-            print_formatted_text(ANSI(self.__fmt__("[ERROR]", message, extra)))
+            print_formatted_text(ANSI(self.__fmt__("[ERROR]", message, replace, extra)))

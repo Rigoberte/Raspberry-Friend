@@ -1,8 +1,8 @@
 """
 MusicPlayerSkill: handles music playback commands.
 """
-import time
 import os
+import time
 
 from src.application.use_cases.skills.skill import RobotSkill
 from src.domain.models.command import Command, CommandResult
@@ -24,7 +24,11 @@ class MusicPlayerSkill(RobotSkill):
                 "previous-song" : "Play the previous song in the playlist.",
                 "add-to-playlist" : "Add a song to the playlist.",
                 "current-song" : "Get the currently playing song.",
-                "play-current-folder" : "Play all songs in the current folder."
+                "play-current-folder" : "Play all songs in the current folder.",
+                "get-pos" : "Get the current position of the song in seconds.",
+                "volume-up" : "Increase the volume.",
+                "volume-down" : "Decrease the volume.",
+                "set-volume" : "Set the volume to a specific level."
             }
         )
         self.service = service
@@ -63,6 +67,18 @@ class MusicPlayerSkill(RobotSkill):
 
             case "play-current-folder":
                 command_result = self.__play_current_folder__(command)
+
+            case "get-pos":
+                command_result = self.__get_pos__()
+
+            case "volume-up":
+                command_result = self.__volume_up__()
+            
+            case "volume-down":
+                command_result = self.__volume_down__()
+
+            case "set-volume":
+                command_result = self.__set_volume__(command)
                 
         return command_result
     
@@ -152,6 +168,44 @@ class MusicPlayerSkill(RobotSkill):
 
     def __get_pos__(self) -> int:
         return self.service.get_pos()
+    
+    def __volume_up__(self) -> CommandResult:
+        command_result = self.service.volume_up()
+
+        return self.__handle_command_result__(
+            command_result,
+            success_message="Volume increased",
+            failure_message="Failed to increase volume"
+        )
+    
+    def __volume_down__(self) -> CommandResult:
+        command_result = self.service.volume_down()
+
+        return self.__handle_command_result__(
+            command_result,
+            success_message="Volume decreased",
+            failure_message="Failed to decrease volume"
+        )
+    
+    def __set_volume__(self, command: Command) -> CommandResult:
+        text = str(command.get_args().get("text"))
+        level = text.split("-")[0].strip() if text else None
+        
+        if not level or not level.isdigit():
+            return CommandResult(False, "Volume level must be an integer between 0 and 100.")
+
+        if level is None:
+            return CommandResult(False, "Usage: set-volume <level>")
+        
+        level_int = max(0, min(float(level) / 100, 1.0))
+        
+        command_result = self.service.set_volume(level_int)
+
+        return self.__handle_command_result__(
+            command_result,
+            success_message=f"Volume set to {level_int * 100:.0f}%",
+            failure_message="Failed to set volume"
+        )
     
     def __handle_command_result__(self, command_result: dict[str, str | bool], success_message: str, failure_message: str) -> CommandResult:
         if not command_result.get("success", False):

@@ -1,5 +1,9 @@
 from src.domain.ports.outbound.music_player_ports import MusicPlayerPort
+from src.domain.ports.outbound.event_bus_ports import EventBusPort
+from src.domain.events.music_events import PlaybackStarted, PlaybackStopped
 import pygame
+import os
+from datetime import datetime
 
 try:
     from mutagen.mp3 import MP3
@@ -8,13 +12,15 @@ except ImportError:
     HAS_MUTAGEN = False
 
 class PygameMusicPlayerPort(MusicPlayerPort):
-    def __init__(self):
+    def __init__(self, event_bus: EventBusPort | None = None):
         try:
             self.mixer = pygame.mixer
             self.mixer.init()
 
             self.current_index = 0
             self.playlist = []
+            self._event_bus = event_bus
+            self._current_duration_ms = 0
 
         except pygame.error as e:
             print(f"Failed to initialize the mixer: {e}")
@@ -47,7 +53,20 @@ class PygameMusicPlayerPort(MusicPlayerPort):
         }
 
     def stop_song(self) -> dict[str, str | bool]:
-        return self.__apply_if_busy__(self.mixer.music.stop)
+        result = self.__apply_if_busy__(self.mixer.music.stop)
+        
+        # Emitir evento de parada
+        if result.get("success") and self.current_index >= 0 and self.current_index < len(self.playlist):
+            if self._event_bus:
+                song_path = self.playlist[self.current_index]
+                event = PlaybackStopped(
+                    path=song_path,
+                    track=os.path.basename(song_path),
+                    occurred_at=datetime.now(),
+                )
+                self._event_bus.publish(event)
+        
+        return result
 
     def rewind_song(self) -> dict[str, str | bool]:
         return self.__apply_if_busy__(self.mixer.music.rewind)
@@ -84,6 +103,35 @@ class PygameMusicPlayerPort(MusicPlayerPort):
     def is_busy(self) -> bool:
         return self.mixer.music.get_busy()
     
+    def volume_up(self) -> dict[str, str | bool]:
+        current_volume = self.mixer.music.get_volume()
+        new_volume = min(1.0, current_volume + 0.1)
+        self.mixer.music.set_volume(new_volume)
+        
+        return {
+            "success": True,
+            "error-message": ""
+        }
+    
+    def volume_down(self) -> dict[str, str | bool]:
+        current_volume = self.mixer.music.get_volume()
+        new_volume = max(0.0, current_volume - 0.1)
+        self.mixer.music.set_volume(new_volume)
+        
+        return {
+            "success": True,
+            "error-message": ""
+        }
+    
+    def set_volume(self, volume: float) -> dict[str, str | bool]:
+        vol = max(0.0, min(volume, 1.0))
+        self.mixer.music.set_volume(vol)
+        
+        return {
+            "success": True,
+            "error-message": ""
+        }
+    
     def __apply_if_busy__(self, func, *args, **kwargs) -> dict[str, str | bool]:
         if not self.is_busy():
             return {
@@ -114,8 +162,18 @@ class PygameMusicPlayerPort(MusicPlayerPort):
                 except Exception:
                     duration = 0
 
+            self._current_duration_ms = int(duration * 1000)
             self.mixer.music.load(song)
             self.mixer.music.play()
+            
+            if self._event_bus:
+                event = PlaybackStarted(
+                    path=song,
+                    track=os.path.basename(song),
+                    duration_ms=self._current_duration_ms,
+                    occurred_at=datetime.now(),
+                )
+                self._event_bus.publish(event)
 
             return {
                 "success": True,

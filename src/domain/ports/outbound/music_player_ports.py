@@ -47,3 +47,15 @@ class MusicPlayerPort(ABC):
     @abstractmethod
     def is_busy(self) -> bool:
         raise NotImplementedError
+    
+    @abstractmethod
+    def set_volume(self, volume: int) -> dict[str, str | bool]:
+        raise NotImplementedError
+    
+    @abstractmethod
+    def volume_up(self) -> dict[str, str | bool]:
+        raise NotImplementedError
+    
+    @abstractmethod
+    def volume_down(self) -> dict[str, str | bool]:
+        raise NotImplementedError
