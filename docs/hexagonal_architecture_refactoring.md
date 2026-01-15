@@ -113,7 +113,7 @@ from concurrent.futures import ThreadPoolExecutor  # Implementación concreta
 
 class TaskScheduler:
     def __init__(self):
-        self._executor = ThreadPoolExecutor(max_workers=5)  # Acoplamiento
+        self._executor = ThreadPoolExecutor(max_workers=4)  # Acoplamiento
 ```
 
 **Después:**
@@ -221,7 +221,7 @@ src/
 
 1. **Container** crea e inyecta dependencias:
    ```python
-   executor = ThreadPoolExecutorAdapter(max_workers=5)
+   executor = ThreadPoolExecutorAdapter(max_workers=4)
    event_bus = InMemoryEventBus()
    scheduler = TaskScheduler(dispatcher, event_bus, executor)
    ```

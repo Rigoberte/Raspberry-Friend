@@ -1,4 +1,5 @@
 from typing import Optional
+import numpy as np
 
 from src.adapters.inbound.gui.gui_window import GUIWindow, MessageType
 from src.adapters.inbound.gui.presenters.console_presenter import ConsolePresenter
@@ -137,6 +138,19 @@ class GUIAdapter:
             message_type: Tipo de mensaje para colorear
         """
         self.window.add_output(message, message_type)
+
+    def display_camera_frame(self, frame: np.ndarray) -> None:
+        """
+        Muestra un frame de cámara en la ventana principal.
+
+        Args:
+            frame: Array numpy con el frame (BGR de OpenCV o RGB)
+        """
+        self.window.display_camera_frame(frame)
+
+    def clear_camera_display(self) -> None:
+        """Limpia la pantalla de cámara."""
+        self.window.clear_camera_display()
 
     def run(self) -> None:
         """Inicia la GUI."""

@@ -10,7 +10,7 @@ class ThreadPoolExecutorAdapter(TaskExecutorPort):
     Implementa el puerto TaskExecutorPort usando ThreadPoolExecutor de Python.
     """
     
-    def __init__(self, max_workers: int = 5) -> None:
+    def __init__(self, max_workers: int = 4) -> None:
         self._executor = _ThreadPoolExecutor(max_workers=max_workers)
     
     def submit(self, fn: Callable, *args: Any, **kwargs: Any) -> Any:

@@ -11,6 +11,7 @@ from src.domain.ports.outbound.task_executor_ports import TaskExecutorPort
 from src.adapters.outbound.weather.real_weather_adapter import RealWeatherPort
 from src.adapters.outbound.music_player.pygame_music_player_adapter import PygameMusicPlayerPort
 from src.adapters.outbound.task_executor.thread_pool_executor_adapter import ThreadPoolExecutorAdapter
+from src.adapters.outbound.camera.opencv_camera_adapter import OpenCVCameraAdapter
 from src.adapters.inbound.gui.gui_adapter import GUIAdapter
 
 from src.application.use_cases.skills.weather_skill import WeatherSkill
@@ -21,11 +22,12 @@ from src.application.use_cases.skills.playback_monitor_skill import PlaybackMoni
 from src.application.use_cases.skills.file_explorer_skill import FileExplorerSkill
 from src.application.use_cases.skills.wait_skill import WaitSkill
 from src.application.use_cases.skills.calculator_skill import CalculatorSkill
+from src.application.use_cases.skills.camera_skill import CameraSkill
 
 def build_assistant(
     event_bus: EventBusPort = None,
     executor: TaskExecutorPort = None,
-    max_workers: int = 5
+    max_workers: int = 4
 ) -> tuple[AssistantService, ProgressMonitorService | None]:
     """
     Construye e inyecta todas las dependencias del AssistantService.
@@ -45,6 +47,7 @@ def build_assistant(
         executor = ThreadPoolExecutorAdapter(max_workers=max_workers)
     
     music_player = PygameMusicPlayerPort(event_bus=event_bus)
+    camera = OpenCVCameraAdapter()
     
     registry = SkillRegistry()
     registry.register(EchoSkill())
@@ -55,6 +58,7 @@ def build_assistant(
     registry.register(FileExplorerSkill())
     registry.register(WaitSkill())
     registry.register(CalculatorSkill())
+    registry.register(CameraSkill(camera_service=camera))
 
     dispatcher = CommandDispatcher(registry)
     
@@ -75,7 +79,7 @@ def build_assistant(
 def build_gui_adapter(
     event_bus: EventBusPort = None,
     executor: TaskExecutorPort = None,
-    max_workers: int = 5,
+    max_workers: int = 4,
     title: str = "Raspberry Friend",
     width: int = 800,
     height: int = 600,
@@ -94,16 +98,52 @@ def build_gui_adapter(
     Returns:
         GUIAdapter configurado y listo para usar
     """
-    assistant_service, _ = build_assistant(
+    if event_bus is None:
+        event_bus = NoOpEventBus()
+    
+    if executor is None:
+        executor = ThreadPoolExecutorAdapter(max_workers=max_workers)
+    
+    # Crear adaptador de música
+    music_player = PygameMusicPlayerPort(event_bus=event_bus)
+    
+    # Crear adaptador de cámara
+    camera = OpenCVCameraAdapter()
+    
+    # Crear registry de skills
+    registry = SkillRegistry()
+    registry.register(EchoSkill())
+    registry.register(TimeSkill())
+    registry.register(WeatherSkill(service=RealWeatherPort()))
+    registry.register(MusicPlayerSkill(service=music_player))
+    registry.register(PlaybackMonitorSkill(player=music_player, event_bus=event_bus))
+    registry.register(FileExplorerSkill())
+    registry.register(WaitSkill())
+    registry.register(CalculatorSkill())
+    registry.register(CameraSkill(camera_service=camera))
+
+    # Crear dispatcher y scheduler
+    dispatcher = CommandDispatcher(registry)
+    scheduler = TaskScheduler(
+        dispatcher=dispatcher,
         event_bus=event_bus,
-        executor=executor,
-        max_workers=max_workers
+        executor=executor
     )
     
-    return GUIAdapter(
+    # Crear servicio asistente
+    assistant_service = AssistantService(registry, scheduler)
+    
+    # Crear adaptador GUI
+    gui_adapter = GUIAdapter(
         assistant_service=assistant_service,
         event_bus=event_bus,
         title=title,
         width=width,
         height=height,
     )
+    
+    # Conectar la cámara al GUI para que envíe frames y limpie al detener
+    camera.set_frame_callback(gui_adapter.display_camera_frame)
+    camera.set_clear_callback(gui_adapter.clear_camera_display)
+    
+    return gui_adapter

@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import scrolledtext
 from typing import Callable, Optional
+from PIL import Image, ImageTk
+import numpy as np
 
 
 class MessageType:
@@ -57,6 +59,9 @@ class GUIWindow:
         # Iconografía y estilo
         self.root.configure(bg=self.BG_PRIMARY)
         
+        # Configurar cierre de ventana para terminar la aplicación
+        self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+        
         self._setup_styles()
         self._setup_ui()
 
@@ -85,13 +90,78 @@ class GUIWindow:
         separator = tk.Frame(self.root, bg=self.FG_ACCENT, height=2)
         separator.pack(fill=tk.X)
 
-        # Frame principal con padding
-        main_frame = tk.Frame(self.root, bg=self.BG_PRIMARY)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+        # Frame principal con PanedWindow para separar cámara y consola
+        paned_window = tk.PanedWindow(
+            self.root,
+            orient=tk.VERTICAL,
+            bg=self.BG_PRIMARY,
+            sashwidth=8,
+            relief=tk.FLAT,
+            borderwidth=0
+        )
+        paned_window.pack(fill=tk.BOTH, expand=True, padx=0, pady=0)
+
+        # === Panel Superior: Cámara/Contenido ===
+        camera_frame = tk.Frame(paned_window, bg=self.BG_PRIMARY)
+        paned_window.add(camera_frame, stretch='always')
+
+        camera_label = tk.Label(
+            camera_frame,
+            text="📹 Vista en Vivo",
+            font=("Arial", 11, "bold"),
+            bg=self.BG_PRIMARY,
+            fg=self.FG_ACCENT,
+        )
+        camera_label.pack(anchor=tk.W, padx=15, pady=(15, 8))
+
+        # Canvas para mostrar frames de cámara
+        self.camera_canvas = tk.Canvas(
+            camera_frame,
+            bg=self.BG_SECONDARY,
+            highlightbackground=self.BG_SECONDARY,
+            highlightthickness=0,
+            relief=tk.FLAT
+        )
+        self.camera_canvas.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
+
+        # Placeholder de texto cuando no hay cámara
+        self.camera_placeholder = tk.Label(
+            self.camera_canvas,
+            text="Esperando stream de cámara...",
+            font=("Arial", 12),
+            bg=self.BG_SECONDARY,
+            fg=self.FG_TEXT
+        )
+        self.camera_placeholder_id = self.camera_canvas.create_window(
+            0, 0, window=self.camera_placeholder, anchor=tk.CENTER
+        )
+
+        def on_canvas_resize(event):
+            """Centra el placeholder cuando se redimensiona el canvas."""
+            self.camera_canvas.coords(
+                self.camera_placeholder_id,
+                event.width // 2,
+                event.height // 2
+            )
+
+        self.camera_canvas.bind("<Configure>", on_canvas_resize)
+
+        # === Panel Inferior: Consola ===
+        console_frame = tk.Frame(paned_window, bg=self.BG_PRIMARY)
+        paned_window.add(console_frame, stretch='always')
+
+        console_label = tk.Label(
+            console_frame,
+            text="📋 Consola",
+            font=("Arial", 11, "bold"),
+            bg=self.BG_PRIMARY,
+            fg=self.FG_ACCENT,
+        )
+        console_label.pack(anchor=tk.W, padx=15, pady=(15, 8))
 
         # Sección de salida (consola)
-        output_frame = tk.Frame(main_frame, bg=self.BG_PRIMARY)
-        output_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+        output_frame = tk.Frame(console_frame, bg=self.BG_PRIMARY)
+        output_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 0))
 
         output_label = tk.Label(
             output_frame,
@@ -105,23 +175,23 @@ class GUIWindow:
         self.output_text = scrolledtext.ScrolledText(
             output_frame,
             wrap=tk.WORD,
-            font=("Courier New", 10),
+            font=("Courier New", 9),
             state=tk.DISABLED,
-            height=18,
+            height=8,
             bg=self.BG_SECONDARY,
             fg=self.FG_TEXT,
             insertbackground=self.FG_ACCENT,
             selectbackground=self.FG_ACCENT,
             selectforeground=self.BG_SECONDARY,
         )
-        self.output_text.pack(fill=tk.BOTH, expand=True)
+        self.output_text.pack(fill=tk.BOTH, expand=True, padx=0, pady=(0, 12))
 
         # Configurar tags para colores
         self._configure_text_tags()
 
-        # Sección de entrada
-        input_frame = tk.Frame(main_frame, bg=self.BG_PRIMARY)
-        input_frame.pack(fill=tk.X, pady=(0, 12))
+        # Sección de entrada (ahora dentro del console_frame)
+        input_frame = tk.Frame(console_frame, bg=self.BG_PRIMARY)
+        input_frame.pack(fill=tk.X, padx=15, pady=(0, 0))
 
         input_label = tk.Label(
             input_frame,
@@ -134,19 +204,19 @@ class GUIWindow:
 
         self.input_text = tk.Entry(
             input_frame,
-            font=("Courier New", 11),
+            font=("Courier New", 10),
             bg=self.BG_SECONDARY,
             fg=self.FG_TEXT,
             insertbackground=self.FG_ACCENT,
             relief=tk.FLAT,
             bd=1,
         )
-        self.input_text.pack(fill=tk.X, ipady=8)
+        self.input_text.pack(fill=tk.X, ipady=6)
         self.input_text.bind("<Return>", self._on_enter_pressed)
 
-        # Frame para botones
-        button_frame = tk.Frame(main_frame, bg=self.BG_PRIMARY)
-        button_frame.pack(fill=tk.X, pady=(0, 0))
+        # Frame para botones (dentro de console_frame)
+        button_frame = tk.Frame(console_frame, bg=self.BG_PRIMARY)
+        button_frame.pack(fill=tk.X, padx=15, pady=(12, 15))
 
         self.send_button = tk.Button(
             button_frame,
@@ -230,6 +300,91 @@ class GUIWindow:
             callback: Función a ejecutar cuando se envía un comando
         """
         self.on_command = callback
+    
+    def _on_closing(self) -> None:
+        """Maneja el evento de cierre de ventana."""
+        import sys
+        self.root.quit()
+        self.root.destroy()
+        sys.exit(0)
+
+    def display_camera_frame(self, frame: np.ndarray) -> None:
+        """
+        Muestra un frame de cámara (array de numpy) en el canvas.
+
+        Args:
+            frame: Array numpy con formato BGR (OpenCV) o RGB
+        """
+        try:
+            # Convertir BGR a RGB si es necesario
+            if len(frame.shape) == 3 and frame.shape[2] == 3:
+                # Asumir BGR de OpenCV y convertir a RGB
+                import cv2
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            else:
+                frame_rgb = frame
+
+            # Convertir numpy array a PIL Image
+            image = Image.fromarray(frame_rgb)
+            
+            # Redimensionar la imagen al tamaño del canvas manteniendo aspecto
+            canvas_width = self.camera_canvas.winfo_width()
+            canvas_height = self.camera_canvas.winfo_height()
+            
+            if canvas_width > 1 and canvas_height > 1:  # Evitar valores inválidos
+                image.thumbnail((canvas_width - 30, canvas_height - 30), Image.Resampling.LANCZOS)
+                
+                # Convertir a PhotoImage
+                self.camera_photo = ImageTk.PhotoImage(image)
+                
+                # Ocultar placeholder en la primera actualización
+                if hasattr(self, 'camera_placeholder') and hasattr(self, 'camera_placeholder_id'):
+                    try:
+                        self.camera_canvas.itemconfig(self.camera_placeholder_id, state='hidden')
+                    except:
+                        pass
+                
+                # Actualizar o crear la imagen en el canvas (sin borrar todo)
+                if not hasattr(self, 'camera_image_id'):
+                    # Primera vez: crear la imagen
+                    self.camera_image_id = self.camera_canvas.create_image(
+                        canvas_width // 2,
+                        canvas_height // 2,
+                        image=self.camera_photo
+                    )
+                else:
+                    # Actualizaciones posteriores: solo cambiar la imagen
+                    self.camera_canvas.coords(
+                        self.camera_image_id,
+                        canvas_width // 2,
+                        canvas_height // 2
+                    )
+                    self.camera_canvas.itemconfig(self.camera_image_id, image=self.camera_photo)
+        except Exception as e:
+            self.add_output(f"Error al mostrar frame de cámara: {str(e)}", MessageType.ERROR)
+
+    def clear_camera_display(self) -> None:
+        """Limpia la pantalla de cámara y muestra el placeholder."""
+        try:
+            # Eliminar la imagen de la cámara si existe
+            if hasattr(self, 'camera_image_id'):
+                self.camera_canvas.delete(self.camera_image_id)
+                delattr(self, 'camera_image_id')
+            
+            # Mostrar el placeholder nuevamente
+            if hasattr(self, 'camera_placeholder') and hasattr(self, 'camera_placeholder_id'):
+                try:
+                    self.camera_canvas.itemconfig(self.camera_placeholder_id, state='normal')
+                except:
+                    # Si el placeholder fue eliminado, recrearlo
+                    self.camera_placeholder_id = self.camera_canvas.create_window(
+                        self.camera_canvas.winfo_width() // 2,
+                        self.camera_canvas.winfo_height() // 2,
+                        window=self.camera_placeholder,
+                        anchor=tk.CENTER
+                    )
+        except Exception as e:
+            self.add_output(f"Error al limpiar pantalla de cámara: {str(e)}", MessageType.ERROR)
 
     def run(self) -> None:
         """Inicia el loop de la GUI."""
@@ -239,4 +394,3 @@ class GUIWindow:
     def close(self) -> None:
         """Cierra la ventana GUI."""
         self.root.quit()
-
