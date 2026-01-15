@@ -46,4 +46,4 @@ dist/
 .userdata/
 
 # Configs
-configs.py
+configs_dev.py

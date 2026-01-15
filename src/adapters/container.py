@@ -13,6 +13,7 @@ from src.adapters.outbound.music_player.pygame_music_player_adapter import Pygam
 from src.adapters.outbound.task_executor.thread_pool_executor_adapter import ThreadPoolExecutorAdapter
 from src.adapters.outbound.camera.opencv_camera_adapter import OpenCVCameraAdapter
 from src.adapters.outbound.ai_chatbot.gemini_adapter import GeminiAdapter
+from src.adapters.outbound.tts.pyttsx3_tts_adapter import Pyttsx3TTSAdapter
 from src.adapters.inbound.gui.gui_adapter import GUIAdapter
 
 from src.application.use_cases.skills.weather_skill import WeatherSkill
@@ -25,8 +26,14 @@ from src.application.use_cases.skills.wait_skill import WaitSkill
 from src.application.use_cases.skills.calculator_skill import CalculatorSkill
 from src.application.use_cases.skills.camera_skill import CameraSkill
 from src.application.use_cases.skills.ai_chatbot_skill import AI_ChatbotSkill
+from src.application.use_cases.skills.say_skill import SaySkill
 
-from src.configs.configs import Configs
+branch = "develop" # TODO: Detect dynamically based on environment
+
+if branch == "develop":
+    from src.configs.configs_dev import Configs
+else:
+    from src.configs.configs import Configs
 
 def build_assistant(
     event_bus: EventBusPort = None,
@@ -53,6 +60,7 @@ def build_assistant(
     music_player = PygameMusicPlayerPort(event_bus=event_bus)
     camera = OpenCVCameraAdapter()
     gemini_adapter = GeminiAdapter(api_key=Configs.GEMINI_API_KEY.value)
+    tts_adapter = Pyttsx3TTSAdapter(rate=150, volume=0.9)
     
     registry = SkillRegistry()
     registry.register(EchoSkill())
@@ -65,6 +73,7 @@ def build_assistant(
     registry.register(CalculatorSkill())
     registry.register(CameraSkill(camera_service=camera))
     registry.register(AI_ChatbotSkill(gemini_service=gemini_adapter))
+    registry.register(SaySkill(tts_service=tts_adapter))
 
     dispatcher = CommandDispatcher(registry)
     
