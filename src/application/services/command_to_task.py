@@ -11,6 +11,7 @@ from src.domain.models.scheduling_policy import ScheduleKind
 from src.application.services.scheduling_policy_parser import SchedulingPolicyParser
 
 from src.application.use_cases.workflows.play_song_workflow import build_play_song_workflow #TODO: replace to do it extensible
+from src.application.use_cases.workflows.transcribe_me_workflow import build_transcribe_me_workflow
 
 
 class CommandToTask:
@@ -19,6 +20,7 @@ class CommandToTask:
         
         self._workflow_builders: dict[str, Callable[[Command], Task]] = {
             "play-song": build_play_song_workflow,
+            "transcribe-me": build_transcribe_me_workflow,
         }
 
     def build(self, command: Command) -> Task:

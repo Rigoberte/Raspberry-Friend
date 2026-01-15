@@ -68,7 +68,14 @@ class WorkflowTask(Task): # Composite
 
                 step.on_success(self._ctx, res)
 
-            self._result = CommandResult(True, "Workflow completed", data=self._ctx)
+            # Construir mensaje final con el contenido del resultado del último step
+            final_message = "Workflow completed"
+            if self._steps and res:
+                last_message = res.get_message()
+                if last_message and last_message != "Workflow completed":
+                    final_message = last_message
+            
+            self._result = CommandResult(True, final_message, data=self._ctx)
             self.on_execution_complete()
             
             self._emit_event(
@@ -77,7 +84,7 @@ class WorkflowTask(Task): # Composite
                     command_name="workflow",
                     occurred_at=datetime.now(timezone.utc),
                     success=True,
-                    message="Workflow completed",
+                    message=final_message,
                     output=self._ctx
                 )
             )

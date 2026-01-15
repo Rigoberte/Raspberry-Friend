@@ -13,7 +13,7 @@ class GeminiAdapter(AI_ChatBotPort):
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "gemini-2.0-flash",
+        model: str = "gemini-2.0-flash-001",
         timeout: float = 30.0,
     ) -> None:
         self.api_key = api_key

@@ -14,6 +14,8 @@ from src.adapters.outbound.task_executor.thread_pool_executor_adapter import Thr
 from src.adapters.outbound.camera.opencv_camera_adapter import OpenCVCameraAdapter
 from src.adapters.outbound.ai_chatbot.gemini_adapter import GeminiAdapter
 from src.adapters.outbound.tts.pyttsx3_tts_adapter import Pyttsx3TTSAdapter
+from src.adapters.outbound.microphone.sounddevice_microphone_adapter import SoundDeviceMicrophoneAdapter
+from src.adapters.outbound.transcription.gemini_transcription_adapter import GeminiTranscriptionAdapter
 from src.adapters.inbound.gui.gui_adapter import GUIAdapter
 
 from src.application.use_cases.skills.weather_skill import WeatherSkill
@@ -27,10 +29,12 @@ from src.application.use_cases.skills.calculator_skill import CalculatorSkill
 from src.application.use_cases.skills.camera_skill import CameraSkill
 from src.application.use_cases.skills.ai_chatbot_skill import AI_ChatbotSkill
 from src.application.use_cases.skills.say_skill import SaySkill
+from src.application.use_cases.skills.record_audio_skill import RecordAudioSkill
+from src.application.use_cases.skills.transcribe_skill import TranscribeSkill
 
-branch = "develop" # TODO: Detect dynamically based on environment
+BRANCH = "develop" # TODO: Detect dynamically based on environment
 
-if branch == "develop":
+if BRANCH == "develop":
     from src.configs.configs_dev import Configs
 else:
     from src.configs.configs import Configs
@@ -61,6 +65,8 @@ def build_assistant(
     camera = OpenCVCameraAdapter()
     gemini_adapter = GeminiAdapter(api_key=Configs.GEMINI_API_KEY.value)
     tts_adapter = Pyttsx3TTSAdapter(rate=150, volume=0.9)
+    mic_adapter = SoundDeviceMicrophoneAdapter(output_dir="user_data/media")
+    stt_adapter = GeminiTranscriptionAdapter(api_key=Configs.GEMINI_API_KEY.value)
     
     registry = SkillRegistry()
     registry.register(EchoSkill())
@@ -74,6 +80,8 @@ def build_assistant(
     registry.register(CameraSkill(camera_service=camera))
     registry.register(AI_ChatbotSkill(gemini_service=gemini_adapter))
     registry.register(SaySkill(tts_service=tts_adapter))
+    registry.register(RecordAudioSkill(mic_service=mic_adapter))
+    registry.register(TranscribeSkill(stt_service=stt_adapter))
 
     dispatcher = CommandDispatcher(registry)
     
