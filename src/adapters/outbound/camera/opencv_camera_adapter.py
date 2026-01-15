@@ -1,9 +1,10 @@
 import cv2
 import threading
+import time
 from typing import Callable, Optional
 from src.domain.ports.outbound.camera_ports import CameraPort
 
-CAMERA_INDEX = 0  # Default camera index
+CAMERA_INDEX = 1  # Default camera index
 
 class OpenCVCameraAdapter(CameraPort):
     """
@@ -15,10 +16,62 @@ class OpenCVCameraAdapter(CameraPort):
     def __init__(self):
         self.camera = None
         self.is_running = False
+        self.is_tracking = False
         self.camera_thread = None
         self.window_name = "Raspberry Friend - Camera"
-        self.frame_callback: Optional[Callable] = None
+        self.view_callback: Optional[Callable] = None  # GUI/frame consumer
         self.clear_callback: Optional[Callable] = None
+        self.face_cascade = None
+        self.thread_stopped = threading.Event()  # Signal when thread has fully stopped
+        self.thread_stopped.set()  # Initially stopped
+    
+    def track_my_face(self) -> dict[str, str | bool]:
+        """
+        Enable face tracking without restarting the camera.
+        Uses Haar cascade for lightweight face detection.
+
+        Returns:
+            dict with 'success' (bool) and 'error-message' (str) keys
+        """
+        # Auto-start camera if needed
+        if not self.is_running:
+            start_result = self.start_camera()
+            if not start_result.get("success", False):
+                return {
+                    "success": False,
+                    "error-message": start_result.get("error-message", "Failed to start camera")
+                }
+
+        if self.is_tracking:
+            return {"success": True, "error-message": ""}
+
+        try:
+            if self.face_cascade is None:
+                cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+                self.face_cascade = cv2.CascadeClassifier(cascade_path)
+
+            if self.face_cascade is None or self.face_cascade.empty():
+                return {
+                    "success": False,
+                    "error-message": "Failed to load face detection model"
+                }
+
+            self.is_tracking = True
+            self.window_name = "Raspberry Friend - Face Tracking"
+
+            return {"success": True, "error-message": ""}
+        except Exception as exc:  # noqa: BLE001
+            self.is_tracking = False
+            return {
+                "success": False,
+                "error-message": f"Error enabling face tracking: {exc}"
+            }
+
+    def untrack_my_face(self) -> dict[str, str | bool]:
+        """Disable face tracking while keeping camera on."""
+        self.is_tracking = False
+        self.window_name = "Raspberry Friend - Camera"
+        return {"success": True, "error-message": ""}
     
     def start_camera(self) -> dict[str, str | bool]:
         """
@@ -40,6 +93,12 @@ class OpenCVCameraAdapter(CameraPort):
             }
         
         try:
+            # Ensure previous thread is fully cleaned up before reopening
+            if not self.thread_stopped.is_set():
+                self.thread_stopped.wait(timeout=2.0)
+            
+            time.sleep(0.3)
+            
             self.camera = cv2.VideoCapture(CAMERA_INDEX)
             
             if not self.camera.isOpened():
@@ -49,6 +108,7 @@ class OpenCVCameraAdapter(CameraPort):
                 }
             
             self.is_running = True
+            self.thread_stopped.clear()  # Mark thread as not stopped
             self.camera_thread = threading.Thread(target=self.__display_camera_feed__, daemon=True)
             self.camera_thread.start()
             
@@ -71,14 +131,33 @@ class OpenCVCameraAdapter(CameraPort):
         """
         try:
             self.is_running = False
+            self.is_tracking = False
+            # DO NOT clear callback - it will be reused on restart
+            self.window_name = "Raspberry Friend - Camera"
             
+            # Wait for thread to stop reading before releasing camera
+            if not self.thread_stopped.wait(timeout=2.5):
+                print("Warning: Camera thread did not stop in time")
+            
+            # Now safe to release camera
             if self.camera is not None:
-                self.camera.release()
+                try:
+                    self.camera.release()
+                except Exception as e:
+                    print(f"Error releasing camera: {e}")
                 self.camera = None
+
+            # Wait for capture thread to finish
+            if self.camera_thread is not None and self.camera_thread.is_alive():
+                self.camera_thread.join(timeout=1.0)
+            self.camera_thread = None
+            
+            # Extra delay for MSMF handles to fully release on Windows
+            time.sleep(1.0)
             
             cv2.destroyAllWindows()
             
-            # Llamar al callback de limpieza si existe
+            # Llamar al callback de limpieza si existe (clear GUI display)
             if self.clear_callback is not None:
                 try:
                     self.clear_callback()
@@ -111,13 +190,8 @@ class OpenCVCameraAdapter(CameraPort):
             return False
     
     def set_frame_callback(self, callback: Optional[Callable]) -> None:
-        """
-        Set a callback function to receive camera frames.
-        
-        Args:
-            callback: Function that accepts a frame (numpy array) or None to disable
-        """
-        self.frame_callback = callback
+        """Set a callback function to receive processed frames (GUI)."""
+        self.view_callback = callback
     
     def set_clear_callback(self, callback: Optional[Callable]) -> None:
         """
@@ -134,33 +208,56 @@ class OpenCVCameraAdapter(CameraPort):
         Runs in a separate thread.
         Sends frames to the callback if one is set, otherwise displays in window.
         """
-        while self.is_running:
+        try:
+            while self.is_running and self.camera is not None:
+                try:
+                    ret, frame = self.camera.read()
+                    
+                    if not ret or self.camera is None:
+                        break
+                    
+                    # Apply tracking overlay if enabled
+                    if self.is_tracking and self.face_cascade is not None:
+                        frame = self.__annotate_faces__(frame)
+
+                    # Send frame to GUI callback if set
+                    if self.view_callback is not None:
+                        try:
+                            self.view_callback(frame)
+                        except Exception as e:
+                            print(f"Error in frame callback: {str(e)}")
+                    # If no callback, drop frame to avoid creating external windows
+                
+                except Exception as e:
+                    print(f"Error in camera feed: {str(e)}")
+                    break
+        finally:
+            # Signal that thread has finished
+            self.thread_stopped.set()
+            # Final cleanup
             try:
-                ret, frame = self.camera.read()
-                
-                if not ret:
-                    break
-                
-                # Send frame to callback if one is set
-                if self.frame_callback is not None:
-                    try:
-                        self.frame_callback(frame)
-                    except Exception as e:
-                        print(f"Error in frame callback: {str(e)}")
-                else:
-                    # Fallback: Display in window if no callback
-                    cv2.imshow(self.window_name, frame)
-                
-                # Check for 'q' key with small delay (when using window display)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    self.is_running = False
-                    break
-            
-            except Exception as e:
-                print(f"Error in camera feed: {str(e)}")
-                break
-        
-        # Cleanup
-        if self.camera is not None:
-            self.camera.release()
-        cv2.destroyAllWindows()
+                if self.camera is not None:
+                    self.camera.release()
+                    self.camera = None
+            except Exception:
+                pass
+
+    def __annotate_faces__(self, frame):
+        """Detect faces in the frame and render bounding boxes."""
+        if not self.is_tracking:
+            return frame
+
+        try:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = self.face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.2,
+                minNeighbors=5,
+                minSize=(60, 60),
+            )
+
+            for (x, y, w, h) in faces:
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        except Exception as exc:  # noqa: BLE001
+            print(f"Error in face tracking: {exc}")
+        return frame

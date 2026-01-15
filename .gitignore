@@ -44,3 +44,6 @@ dist/
 # songs
 *.mp3
 .userdata/
+
+# Configs
+configs.py

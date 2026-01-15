@@ -47,3 +47,23 @@ class CameraPort(ABC):
             callback: Function that accepts a frame (numpy array) or None to disable
         """
         raise NotImplementedError
+
+    @abstractmethod
+    def track_my_face(self) -> dict[str, str | bool]:
+        """
+        Enable face tracking using the already running camera without restarting it.
+
+        Returns:
+            dict with 'success' (bool) and 'error-message' (str) keys
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def untrack_my_face(self) -> dict[str, str | bool]:
+        """
+        Disable face tracking while keeping the camera on.
+
+        Returns:
+            dict with 'success' (bool) and 'error-message' (str) keys
+        """
+        raise NotImplementedError

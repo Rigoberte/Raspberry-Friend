@@ -142,11 +142,18 @@ class GUIAdapter:
     def display_camera_frame(self, frame: np.ndarray) -> None:
         """
         Muestra un frame de cámara en la ventana principal.
+        Asegura actualización en el hilo de Tkinter.
 
         Args:
             frame: Array numpy con el frame (BGR de OpenCV o RGB)
         """
-        self.window.display_camera_frame(frame)
+        try:
+            # Clonar frame para evitar mutaciones entre hilos
+            frame_copy = frame.copy()
+        except Exception:
+            frame_copy = frame
+        # Ejecutar en el hilo principal de Tkinter
+        self.window.root.after(0, lambda f=frame_copy: self.window.display_camera_frame(f))
 
     def clear_camera_display(self) -> None:
         """Limpia la pantalla de cámara."""

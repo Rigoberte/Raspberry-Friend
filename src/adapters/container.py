@@ -12,6 +12,7 @@ from src.adapters.outbound.weather.real_weather_adapter import RealWeatherPort
 from src.adapters.outbound.music_player.pygame_music_player_adapter import PygameMusicPlayerPort
 from src.adapters.outbound.task_executor.thread_pool_executor_adapter import ThreadPoolExecutorAdapter
 from src.adapters.outbound.camera.opencv_camera_adapter import OpenCVCameraAdapter
+from src.adapters.outbound.ai_chatbot.gemini_adapter import GeminiAdapter
 from src.adapters.inbound.gui.gui_adapter import GUIAdapter
 
 from src.application.use_cases.skills.weather_skill import WeatherSkill
@@ -23,12 +24,15 @@ from src.application.use_cases.skills.file_explorer_skill import FileExplorerSki
 from src.application.use_cases.skills.wait_skill import WaitSkill
 from src.application.use_cases.skills.calculator_skill import CalculatorSkill
 from src.application.use_cases.skills.camera_skill import CameraSkill
+from src.application.use_cases.skills.ai_chatbot_skill import AI_ChatbotSkill
+
+from src.configs.configs import Configs
 
 def build_assistant(
     event_bus: EventBusPort = None,
     executor: TaskExecutorPort = None,
     max_workers: int = 4
-) -> tuple[AssistantService, ProgressMonitorService | None]:
+) -> tuple[AssistantService, ProgressMonitorService | None, OpenCVCameraAdapter | None]:
     """
     Construye e inyecta todas las dependencias del AssistantService.
     
@@ -38,7 +42,7 @@ def build_assistant(
         max_workers: Número de workers para el executor si no se proporciona uno
     
     Returns:
-        Tupla (AssistantService, ProgressMonitorService)
+        Tupla (AssistantService, ProgressMonitorService, OpenCVCameraAdapter)
     """
     if event_bus is None:
         event_bus = NoOpEventBus()
@@ -48,6 +52,7 @@ def build_assistant(
     
     music_player = PygameMusicPlayerPort(event_bus=event_bus)
     camera = OpenCVCameraAdapter()
+    gemini_adapter = GeminiAdapter(api_key=Configs.GEMINI_API_KEY.value)
     
     registry = SkillRegistry()
     registry.register(EchoSkill())
@@ -59,6 +64,7 @@ def build_assistant(
     registry.register(WaitSkill())
     registry.register(CalculatorSkill())
     registry.register(CameraSkill(camera_service=camera))
+    registry.register(AI_ChatbotSkill(gemini_service=gemini_adapter))
 
     dispatcher = CommandDispatcher(registry)
     
@@ -73,7 +79,7 @@ def build_assistant(
     if not isinstance(event_bus, NoOpEventBus):
         progress_monitor = ProgressMonitorService(scheduler, event_bus)
     
-    return AssistantService(registry, scheduler), progress_monitor
+    return AssistantService(registry, scheduler), progress_monitor, camera
 
 
 def build_gui_adapter(
@@ -100,38 +106,14 @@ def build_gui_adapter(
     """
     if event_bus is None:
         event_bus = NoOpEventBus()
-    
     if executor is None:
         executor = ThreadPoolExecutorAdapter(max_workers=max_workers)
-    
-    # Crear adaptador de música
-    music_player = PygameMusicPlayerPort(event_bus=event_bus)
-    
-    # Crear adaptador de cámara
-    camera = OpenCVCameraAdapter()
-    
-    # Crear registry de skills
-    registry = SkillRegistry()
-    registry.register(EchoSkill())
-    registry.register(TimeSkill())
-    registry.register(WeatherSkill(service=RealWeatherPort()))
-    registry.register(MusicPlayerSkill(service=music_player))
-    registry.register(PlaybackMonitorSkill(player=music_player, event_bus=event_bus))
-    registry.register(FileExplorerSkill())
-    registry.register(WaitSkill())
-    registry.register(CalculatorSkill())
-    registry.register(CameraSkill(camera_service=camera))
 
-    # Crear dispatcher y scheduler
-    dispatcher = CommandDispatcher(registry)
-    scheduler = TaskScheduler(
-        dispatcher=dispatcher,
+    assistant_service, _, camera = build_assistant(
         event_bus=event_bus,
-        executor=executor
+        executor=executor,
+        max_workers=max_workers
     )
-    
-    # Crear servicio asistente
-    assistant_service = AssistantService(registry, scheduler)
     
     # Crear adaptador GUI
     gui_adapter = GUIAdapter(

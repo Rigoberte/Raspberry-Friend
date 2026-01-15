@@ -32,7 +32,7 @@ def main():
     events_bus.subscribe(PlaybackStopped, music_logger.on_playback_stopped)
     events_bus.subscribe(PlaybackProgress, music_logger.on_progress)
 
-    assistant, progress_monitor = build_assistant(event_bus=events_bus)
+    assistant, _, _ = build_assistant(event_bus=events_bus)
     
     # Crear caso de uso y parser
     execute_command_uc = ExecuteCommandUseCase(assistant, output_logger)
