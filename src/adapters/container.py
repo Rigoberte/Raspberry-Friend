@@ -31,6 +31,7 @@ from src.application.use_cases.skills.ai_chatbot_skill import AI_ChatbotSkill
 from src.application.use_cases.skills.say_skill import SaySkill
 from src.application.use_cases.skills.record_audio_skill import RecordAudioSkill
 from src.application.use_cases.skills.transcribe_skill import TranscribeSkill
+from src.application.use_cases.skills.interpret_and_respond_skill import InterpretAndRespondSkill
 
 BRANCH = "develop" # TODO: Detect dynamically based on environment
 
@@ -83,7 +84,17 @@ def build_assistant(
     registry.register(RecordAudioSkill(mic_service=mic_adapter))
     registry.register(TranscribeSkill(stt_service=stt_adapter))
 
+    
+    # Skill auxiliar para el árbol de decisión del workflow
+    interpret_and_respond = InterpretAndRespondSkill(
+        ai_service=gemini_adapter,
+        tts_service=tts_adapter
+    )
+    registry.register(interpret_and_respond)
+
+
     dispatcher = CommandDispatcher(registry)
+    interpret_and_respond._dispatcher = dispatcher # TODO: Eliminar Setter
     
     scheduler = TaskScheduler(
         dispatcher=dispatcher,
