@@ -1,5 +1,6 @@
 import os
 import threading
+from difflib import get_close_matches
 
 from .skill import RobotSkill
 from src.domain.models.command import Command, CommandResult
@@ -135,25 +136,49 @@ class FileExplorerSkill(RobotSkill):
         return CommandResult(True, f"Selected: {file_name}", data={"path": file_path, "cwd": cwd})
 
     def __find_song__(self, command: Command) -> CommandResult:
-        query = os.path.basename(command.get_args().get("text", "") or "").strip().lower()
+        query = command.get_args().get("text", "").strip().lower()
         
         if not query:
-            return CommandResult(False, "Usage: find-song <partial-song-name>")
+            return CommandResult(False, "Usage: find-song <song-name>")
 
-        matches: list[str] = []
+        # Recolectar todas las canciones mp3 disponibles
+        all_songs: dict[str, str] = {}  # {filename_lower: full_path}
         for dirpath, _, filenames in os.walk(ROOT):
             for fn in filenames:
-                low = fn.lower()
-                if low.endswith(".mp3") and query in low:
-                    matches.append(os.path.join(dirpath, fn))
+                if fn.lower().endswith(".mp3"):
+                    # Usar el nombre sin extensión para búsqueda
+                    song_name = os.path.splitext(fn)[0].lower()
+                    full_path = os.path.join(dirpath, fn)
+                    all_songs[song_name] = full_path
 
-        if not matches:
-            return CommandResult(False, f"No mp3 found matching '{query}' under '{ROOT}'.")
+        if not all_songs:
+            return CommandResult(False, f"No mp3 files found under '{ROOT}'.")
 
-        matches.sort(key=lambda p: len(os.path.basename(p)))
-        best = matches[0]
+        # Buscar canciones similares usando difflib (como en weather adapter)
+        # get_close_matches devuelve coincidencias ordenadas por similitud
+        close_matches = get_close_matches(
+            query, 
+            all_songs.keys(), 
+            n=10,  # Retornar hasta 10 matches
+            cutoff=0.65  # Umbral de similitud (65% similar es suficiente)
+        )
 
-        return CommandResult(True, f"Found: {os.path.basename(best)}", data={
-            "path": best,
-            "matches": matches
-        })
+        if not close_matches:
+            return CommandResult(
+                False, 
+                f"No similar songs found for '{query}'. Try with a different name."
+            )
+
+        # Usar el mejor match (primero en la lista)
+        best_match = close_matches[0]
+        best_path = all_songs[best_match]
+
+        return CommandResult(
+            True, 
+            f"Found: {best_match}.mp3",
+            data={
+                "path": best_path,
+                "song_name": best_match,
+                "matches": [all_songs[m] for m in close_matches]  # Top 10 matches ordenados por similitud
+            }
+        )
