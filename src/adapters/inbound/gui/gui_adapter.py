@@ -89,6 +89,7 @@ class GUIAdapter:
         """
         self.assistant_service = assistant_service
         self.event_bus = event_bus
+        self.voice_command_adapter = None  # Se conectará después
         
         # Crear ventana GUI
         self.window = GUIWindow(
@@ -158,6 +159,40 @@ class GUIAdapter:
     def clear_camera_display(self) -> None:
         """Limpia la pantalla de cámara."""
         self.window.clear_camera_display()
+
+    def set_voice_command_adapter(self, voice_command_adapter) -> None:
+        """
+        Conecta el adaptador de comandos por voz al GUI.
+        
+        Args:
+            voice_command_adapter: VoiceCommandAdapter para escuchar comandos
+        """
+        self.voice_command_adapter = voice_command_adapter
+        # Conectar callback al botón "Escuchar" de la GUI
+        self.window.on_listen = self._handle_voice_command
+
+    def _handle_voice_command(self) -> None:
+        """
+        Maneja el evento de escuchar comando por voz.
+        Ejecuta listen_and_execute y muestra el resultado en la GUI.
+        """
+        if not self.voice_command_adapter:
+            self.display_message("⚠️ Adaptador de voz no configurado", MessageType.WARNING)
+            return
+        
+        try:
+            # Ejecutar escucha e interpretación (duración por defecto: 10s)
+            result = self.voice_command_adapter.listen_and_execute()
+            
+            if result["success"]:
+                # Mostrar mensaje de éxito
+                self.display_message(result["message"], MessageType.SUCCESS)
+            else:
+                # Mostrar error
+                self.display_message(result["message"], MessageType.ERROR)
+                
+        except Exception as e:
+            self.display_message(f"❌ Error en comando por voz: {str(e)}", MessageType.ERROR)
 
     def run(self) -> None:
         """Inicia la GUI."""

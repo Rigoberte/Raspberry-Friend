@@ -31,7 +31,7 @@ from src.application.use_cases.skills.ai_chatbot_skill import AI_ChatbotSkill
 from src.application.use_cases.skills.say_skill import SaySkill
 from src.application.use_cases.skills.record_audio_skill import RecordAudioSkill
 from src.application.use_cases.skills.transcribe_skill import TranscribeSkill
-from src.application.use_cases.skills.interpret_and_respond_skill import InterpretAndRespondSkill
+from src.adapters.inbound.voice_command import VoiceCommandAdapter
 
 BRANCH = "develop" # TODO: Detect dynamically based on environment
 
@@ -44,7 +44,7 @@ def build_assistant(
     event_bus: EventBusPort = None,
     executor: TaskExecutorPort = None,
     max_workers: int = 4
-) -> tuple[AssistantService, ProgressMonitorService | None, OpenCVCameraAdapter | None]:
+) -> tuple[AssistantService, ProgressMonitorService | None, OpenCVCameraAdapter | None, VoiceCommandAdapter]:
     """
     Construye e inyecta todas las dependencias del AssistantService.
     
@@ -84,17 +84,7 @@ def build_assistant(
     registry.register(RecordAudioSkill(mic_service=mic_adapter))
     registry.register(TranscribeSkill(stt_service=stt_adapter))
 
-    
-    # Skill auxiliar para el árbol de decisión del workflow
-    interpret_and_respond = InterpretAndRespondSkill(
-        ai_service=gemini_adapter,
-        tts_service=tts_adapter
-    )
-    registry.register(interpret_and_respond)
-
-
     dispatcher = CommandDispatcher(registry)
-    interpret_and_respond._dispatcher = dispatcher # TODO: Eliminar Setter
     
     scheduler = TaskScheduler(
         dispatcher=dispatcher,
@@ -102,12 +92,24 @@ def build_assistant(
         executor=executor
     )
     
+    assistant_service = AssistantService(registry, scheduler)
+    
+    # Inbound Adapter: Voice Command (comandos por voz)
+    voice_command_adapter = VoiceCommandAdapter(
+        assistant_service=assistant_service,
+        mic_service=mic_adapter,
+        transcription_service=stt_adapter,
+        ai_service=gemini_adapter,
+        tts_service=tts_adapter,
+        default_record_seconds=10.0
+    )
+    
     # Inicializar monitor de progreso si el bus está activo
     progress_monitor = None
     if not isinstance(event_bus, NoOpEventBus):
         progress_monitor = ProgressMonitorService(scheduler, event_bus)
     
-    return AssistantService(registry, scheduler), progress_monitor, camera
+    return assistant_service, progress_monitor, camera, voice_command_adapter
 
 
 def build_gui_adapter(
@@ -137,7 +139,7 @@ def build_gui_adapter(
     if executor is None:
         executor = ThreadPoolExecutorAdapter(max_workers=max_workers)
 
-    assistant_service, _, camera = build_assistant(
+    assistant_service, _, camera, voice_command_adapter = build_assistant(
         event_bus=event_bus,
         executor=executor,
         max_workers=max_workers
@@ -155,5 +157,8 @@ def build_gui_adapter(
     # Conectar la cámara al GUI para que envíe frames y limpie al detener
     camera.set_frame_callback(gui_adapter.display_camera_frame)
     camera.set_clear_callback(gui_adapter.clear_camera_display)
+    
+    # Conectar el adaptador de voz al GUI
+    gui_adapter.set_voice_command_adapter(voice_command_adapter)
     
     return gui_adapter

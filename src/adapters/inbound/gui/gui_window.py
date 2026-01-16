@@ -51,6 +51,7 @@ class GUIWindow:
             on_command: Callback cuando se ejecuta un comando
         """
         self.on_command = on_command
+        self.on_listen = None  # Callback para comandos por voz
         self.root = tk.Tk()
         self.root.title(title)
         self.root.geometry(f"{width}x{height}")
@@ -232,6 +233,20 @@ class GUIWindow:
         )
         self.send_button.pack(side=tk.LEFT, padx=(0, 10))
 
+        self.listen_button = tk.Button(
+            button_frame,
+            text="🎤 Escuchar",
+            command=self._on_listen_clicked,
+            bg="#9b59b6",  # Color púrpura para distinguir
+            fg="white",
+            font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            padx=20,
+            pady=8,
+            cursor="hand2",
+        )
+        self.listen_button.pack(side=tk.LEFT, padx=(0, 10))
+
         self.clear_button = tk.Button(
             button_frame,
             text="🗑️  Limpiar",
@@ -268,6 +283,31 @@ class GUIWindow:
             self.input_text.focus()
             if self.on_command:
                 self.on_command(command)
+
+    def _on_listen_clicked(self) -> None:
+        """Maneja el click del botón escuchar."""
+        if self.on_listen:
+            self.add_output("🎤 Escuchando...", MessageType.INFO)
+            # Deshabilitar botón mientras escucha
+            self.listen_button.config(state=tk.DISABLED, text="⏺️ Grabando...")
+            self.root.update()
+            
+            # Ejecutar callback en thread para no bloquear UI
+            import threading
+            def listen_thread():
+                try:
+                    self.on_listen()
+                finally:
+                    # Re-habilitar botón
+                    self.root.after(0, lambda: self.listen_button.config(
+                        state=tk.NORMAL, 
+                        text="🎤 Escuchar"
+                    ))
+            
+            thread = threading.Thread(target=listen_thread, daemon=True)
+            thread.start()
+        else:
+            self.add_output("⚠️ Comandos por voz no configurados", MessageType.WARNING)
 
     def add_output(self, message: str, message_type: str = MessageType.RESPONSE) -> None:
         """
