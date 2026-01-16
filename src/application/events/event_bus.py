@@ -44,7 +44,8 @@ class InMemoryEventBus(EventBusPort):
     def _loop(self) -> None:
         while self._running:
             try:
-                event = self._q.get(timeout=0.2)
+                # Bloqueo indefinido sin polling: solo se despierta cuando hay evento
+                event = self._q.get(timeout=None)
             except Empty:
                 continue
 
@@ -61,4 +62,6 @@ class InMemoryEventBus(EventBusPort):
 
     def stop(self) -> None:
         self._running = False
+        # Enviar evento centinela para despertar el thread
+        self._q.put(None)
         self._thread.join()

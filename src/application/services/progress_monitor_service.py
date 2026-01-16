@@ -15,6 +15,9 @@ class ProgressMonitorService:
     """
     Escucha eventos de inicio/parada de reproducción y automáticamente
     crea/destruye tareas continuas para monitorear el progreso.
+    
+    OPTIMIZADO: Usa event-driven en lugar de polling.
+    Solo monitorea si hay música reproduciéndose.
     """
 
     def __init__(self, scheduler: TaskScheduler, event_bus: EventBusPort) -> None:
@@ -26,6 +29,10 @@ class ProgressMonitorService:
         event_bus.subscribe(PlaybackStopped, self._on_playback_stopped)
 
     def _on_playback_started(self, ev: PlaybackStarted) -> None:
+        """
+        Crea una tarea de monitoreo cuando comienza la reproducción.
+        CAMBIO: Aumentado check_interval a 2 segundos (de 500ms) para reducir CPU.
+        """
         if ev.path in self._progress_tasks:
             return
 
@@ -35,7 +42,7 @@ class ProgressMonitorService:
                 "track": ev.track,
                 "duration_ms": ev.duration_ms,
             }),
-            check_interval=timedelta(milliseconds=500),
+            check_interval=timedelta(seconds=2),  # ← CAMBIO: De 500ms a 2s
             condition_checker=lambda: True,
             max_executions=None,
             priority=1,
@@ -46,6 +53,10 @@ class ProgressMonitorService:
         self._progress_tasks[ev.path] = task_id
 
     def _on_playback_stopped(self, ev: PlaybackStopped) -> None:
+        """
+        Elimina la tarea de monitoreo cuando se detiene la reproducción.
+        Esto es event-driven: solo se ejecuta cuando detiene música (no continuamente).
+        """
         if ev.path not in self._progress_tasks:
             return
 
@@ -56,3 +67,4 @@ class ProgressMonitorService:
             if task.get_id() == task_id:
                 self._scheduler.remove_task(task)
                 break
+

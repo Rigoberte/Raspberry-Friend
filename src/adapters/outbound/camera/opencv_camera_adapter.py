@@ -24,6 +24,12 @@ class OpenCVCameraAdapter(CameraPort):
         self.face_cascade = None
         self.thread_stopped = threading.Event()  # Signal when thread has fully stopped
         self.thread_stopped.set()  # Initially stopped
+        
+        # Optimización para Raspberry Pi: frame skipping
+        self.frame_skip = 2  # Procesar cada 3er frame (30fps -> 10fps)
+        self.frame_counter = 0
+        self.target_fps = 10  # FPS objetivo para GUI (conservar energía)
+        self.frame_time = 1.0 / self.target_fps  # ~100ms entre frames
     
     def track_my_face(self) -> dict[str, str | bool]:
         """
@@ -207,7 +213,12 @@ class OpenCVCameraAdapter(CameraPort):
         Internal method to display camera feed in real-time.
         Runs in a separate thread.
         Sends frames to the callback if one is set, otherwise displays in window.
+        Optimized for Raspberry Pi with frame skipping and throttling.
         """
+        import time as time_module
+        
+        last_frame_time = time_module.time()
+        
         try:
             while self.is_running and self.camera is not None:
                 try:
@@ -216,7 +227,22 @@ class OpenCVCameraAdapter(CameraPort):
                     if not ret or self.camera is None:
                         break
                     
-                    # Apply tracking overlay if enabled
+                    self.frame_counter += 1
+                    
+                    # Frame skipping: procesar cada N frames (reduce CPU en RPi)
+                    if self.frame_counter % (self.frame_skip + 1) != 0:
+                        continue
+                    
+                    # Throttle a target_fps: no enviar frames más rápido que lo necesario
+                    current_time = time_module.time()
+                    elapsed = current_time - last_frame_time
+                    if elapsed < self.frame_time:
+                        time_module.sleep(self.frame_time - elapsed)
+                        current_time = time_module.time()
+                    
+                    last_frame_time = current_time
+                    
+                    # Apply tracking overlay if enabled (solo si se procesa el frame)
                     if self.is_tracking and self.face_cascade is not None:
                         frame = self.__annotate_faces__(frame)
 
