@@ -10,16 +10,24 @@ class Pyttsx3TTSAdapter(TTSPort):
     Uses threading with per-speech engine initialization to handle pyttsx3's limitations.
     """
     
-    def __init__(self, rate: int = 150, volume: float = 0.9):
+    def __init__(self, rate: int = 150, volume: float = 0.9, language: str = "es") -> None:
         """
         Initialize the TTS adapter.
         
         Args:
             rate: Speech rate in words per minute (default: 150)
             volume: Volume level between 0.0 and 1.0 (default: 0.9)
+            language: Language code for the voice (default: "es" for Spanish)
         """
         self._rate = rate
         self._volume = volume
+        if language == "es":
+            self._voice_id = r'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices\Tokens\TTS_MS_ES-MX_SABINA_11.0'
+        elif language == "en":
+            self._voice_id = r'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices\Tokens\TTS_MS_EN-US_ZIRA_11.0'
+        else:
+            raise ValueError("Unsupported language. Supported languages are 'es' and 'en'.")
+        
         self._is_initialized = True
         self._is_speaking = False
         self._speech_thread = None
@@ -39,7 +47,7 @@ class Pyttsx3TTSAdapter(TTSPort):
             engine = pyttsx3.init()
             engine.setProperty('rate', self._rate)
             engine.setProperty('volume', self._volume)
-            
+            engine.setProperty('voice', self._voice_id)
             # Reproducir el texto
             engine.say(text)
             engine.runAndWait()

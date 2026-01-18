@@ -95,7 +95,7 @@ Ejemplos:
 - Usuario: "¿A qué hora abre el supermercado?"
   Respuesta: {{"is_task": false, "task_name": null, "task_args": null, "response": "Los horarios varían según la ubicación. Generalmente los supermercados abren de 8am a 9pm.", "interpretation": "General query about business hours"}}
 
-IMPORTANTE: Responde SOLO con el JSON, sin explicaciones adicionales. Y siempre las respuestas deben estar en INGLES.""" .strip()
+IMPORTANTE: Responde SOLO con el JSON, sin explicaciones adicionales. Y siempre las respuestas deben estar en ESPAÑOL.""" .strip()
 
     def __init__(
         self,
