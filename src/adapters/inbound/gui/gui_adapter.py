@@ -3,11 +3,15 @@ import numpy as np
 
 from src.adapters.inbound.gui.gui_window import GUIWindow, MessageType
 from src.adapters.inbound.gui.presenters.console_presenter import ConsolePresenter
+from src.adapters.inbound.voice_command.voice_command_adapter import VoiceCommandAdapter
+from src.domain.ports.outbound.microphone_ports import MicrophonePort
+
 from src.application.use_cases.execute_command_use_case import ExecuteCommandUseCase
 from src.application.services.assistant_service import AssistantService
 from src.domain.ports.outbound.event_bus_ports import EventBusPort
 from src.domain.ports.outbound.logger_ports import LoggerPort
 
+from src.application.events.event_bus import NoOpEventBus
 
 class GUILoggerAdapter(LoggerPort):
     """Adaptador que implementa LoggerPort y envía logs a la GUI."""
@@ -72,10 +76,10 @@ class GUIAdapter:
     def __init__(
         self,
         assistant_service: AssistantService,
-        event_bus: Optional[EventBusPort] = None,
+        event_bus: EventBusPort = NoOpEventBus(),
         title: str = "Raspberry Friend",
         width: int = 900,
-        height: int = 700,
+        height: int = 700
     ):
         """
         Inicializa el adaptador GUI con arquitectura MVP.
@@ -87,16 +91,17 @@ class GUIAdapter:
             width: Ancho de la ventana
             height: Alto de la ventana
         """
-        self.assistant_service = assistant_service
-        self.event_bus = event_bus
-        self.voice_command_adapter = None  # Se conectará después
+        self.assistant_service: AssistantService = assistant_service
+        self.event_bus: EventBusPort = event_bus
+        self.voice_command_adapter: VoiceCommandAdapter = None  # Se conectará después # TODO: SACAR SETTER con Null Pattern Object
+        self._mic_adapter: MicrophonePort = None  # Para grabación interactiva # TODO: SACAR SETTER con Null Pattern Object
+        self._last_recording_path = None  # Path del último archivo grabado
         
-        # Crear ventana GUI
         self.window = GUIWindow(
             title=title,
             width=width,
             height=height,
-            on_command=None,  # Se conectará después
+            on_command=None  # Se conectará después
         )
         
         # Crear logger adaptado a la GUI
@@ -110,10 +115,6 @@ class GUIAdapter:
     
     def _setup_presenter(self) -> None:
         """Configura el presenter con sus dependencias."""
-        if not self.event_bus:
-            from src.application.events.event_bus import NoOpEventBus
-            self.event_bus = NoOpEventBus()
-        
         # Crear caso de uso
         execute_command_uc = ExecuteCommandUseCase(
             self.assistant_service,
@@ -160,39 +161,72 @@ class GUIAdapter:
         """Limpia la pantalla de cámara."""
         self.window.clear_camera_display()
 
-    def set_voice_command_adapter(self, voice_command_adapter) -> None:
+    def set_voice_command_adapter(self, voice_command_adapter: VoiceCommandAdapter, mic_adapter: MicrophonePort) -> None:
         """
         Conecta el adaptador de comandos por voz al GUI.
         
         Args:
             voice_command_adapter: VoiceCommandAdapter para escuchar comandos
+            mic_adapter: MicrophonePort para grabación interactiva
         """
         self.voice_command_adapter = voice_command_adapter
-        # Conectar callback al botón "Escuchar" de la GUI
-        self.window.on_listen = self._handle_voice_command
+        # Guardar referencia al micrófono para grabación interactiva
+        self._mic_adapter = mic_adapter
+        # Conectar callbacks para grabación interactiva (press/release)
+        self.window.on_start_recording = self.start_recording
+        self.window.on_stop_recording = self.stop_recording
+        self.window.on_listen_recording_done = self._handle_voice_recording_done
 
-    def _handle_voice_command(self) -> None:
+    def start_recording(self) -> None:
         """
-        Maneja el evento de escuchar comando por voz.
-        Ejecuta listen_and_execute y muestra el resultado en la GUI.
+        Inicia grabación de audio interactivamente.
+        Se llama cuando se presiona el botón.
         """
-        if not self.voice_command_adapter:
-            self.display_message("⚠️ Adaptador de voz no configurado", MessageType.WARNING)
+        if not self._mic_adapter:
+            return
+        
+        result = self._mic_adapter.start_recording()
+        if not result.get("success"):
+            self.display_message(f"⚠️ Error iniciando grabación: {result.get('message', '')}", MessageType.WARNING)
+
+    def stop_recording(self) -> dict:
+        """
+        Detiene grabación de audio interactivamente.
+        Se llama cuando se suelta el botón.
+        
+        Returns:
+            Dict con información de la grabación
+        """
+        if not self._mic_adapter:
+            return {"success": False}
+        
+        result = self._mic_adapter.stop_recording()
+        if result.get("success"):
+            self._last_recording_path = result.get("path")
+        return result
+
+    def _handle_voice_recording_done(self) -> None:
+        """
+        Maneja el fin de grabación interactiva (cuando se suelta el botón).
+        Procesa el archivo grabado con transcripción e interpretación.
+        """
+        if not self.voice_command_adapter or not self._last_recording_path:
+            self.display_message("❌ Error: No hay archivo grabado", MessageType.ERROR)
             return
         
         try:
-            # Ejecutar escucha e interpretación (duración por defecto: 10s)
-            result = self.voice_command_adapter.listen_and_execute()
-            
+            result = self.voice_command_adapter.interpret_voice_command(self._last_recording_path)
+
             if result["success"]:
-                # Mostrar mensaje de éxito
+                transcript = result.get("transcript")
+                if transcript:
+                    self.display_message(f"📝 Transcripción: {transcript}", MessageType.INFO)
                 self.display_message(result["message"], MessageType.SUCCESS)
             else:
-                # Mostrar error
                 self.display_message(result["message"], MessageType.ERROR)
                 
         except Exception as e:
-            self.display_message(f"❌ Error en comando por voz: {str(e)}", MessageType.ERROR)
+            self.display_message(f"❌ Error procesando grabación: {str(e)}", MessageType.ERROR)
 
     def run(self) -> None:
         """Inicia la GUI."""

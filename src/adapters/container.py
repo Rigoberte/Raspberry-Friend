@@ -14,7 +14,7 @@ from src.adapters.outbound.task_executor.thread_pool_executor_adapter import Thr
 from src.adapters.outbound.camera.opencv_camera_adapter import OpenCVCameraAdapter
 from src.adapters.outbound.ai_chatbot.gemini_adapter import GeminiAdapter
 from src.adapters.outbound.tts.pyttsx3_tts_adapter import Pyttsx3TTSAdapter
-from src.adapters.outbound.microphone.sounddevice_microphone_adapter import SoundDeviceMicrophoneAdapter
+from src.adapters.outbound.microphone.microphone_adapter import MicrophoneAdapter
 from src.adapters.outbound.transcription.gemini_transcription_adapter import GeminiTranscriptionAdapter
 from src.adapters.inbound.gui.gui_adapter import GUIAdapter
 
@@ -33,6 +33,8 @@ from src.application.use_cases.skills.record_audio_skill import RecordAudioSkill
 from src.application.use_cases.skills.transcribe_skill import TranscribeSkill
 from src.adapters.inbound.voice_command import VoiceCommandAdapter
 
+from typing import Optional
+
 BRANCH = "develop" # TODO: Detect dynamically based on environment
 
 if BRANCH == "develop":
@@ -44,7 +46,7 @@ def build_assistant(
     event_bus: EventBusPort = None,
     executor: TaskExecutorPort = None,
     max_workers: int = 4
-) -> tuple[AssistantService, ProgressMonitorService | None, OpenCVCameraAdapter | None, VoiceCommandAdapter]:
+) -> tuple[AssistantService, ProgressMonitorService | None, OpenCVCameraAdapter | None, VoiceCommandAdapter, MicrophoneAdapter]:
     """
     Construye e inyecta todas las dependencias del AssistantService.
     
@@ -66,8 +68,8 @@ def build_assistant(
     camera = OpenCVCameraAdapter()
     gemini_adapter = GeminiAdapter(api_key=Configs.GEMINI_API_KEY.value)
     tts_adapter = Pyttsx3TTSAdapter(rate=150, volume=0.9)
-    mic_adapter = SoundDeviceMicrophoneAdapter(output_dir="user_data/media")
-    stt_adapter = GeminiTranscriptionAdapter(api_key=Configs.GEMINI_API_KEY.value)
+    mic_adapter = MicrophoneAdapter(output_dir="user_data/media")
+    stt_adapter = GeminiTranscriptionAdapter()
     
     registry = SkillRegistry()
     registry.register(EchoSkill())
@@ -96,12 +98,9 @@ def build_assistant(
     
     # Inbound Adapter: Voice Command (comandos por voz)
     voice_command_adapter = VoiceCommandAdapter(
-        assistant_service=assistant_service,
-        mic_service=mic_adapter,
-        transcription_service=stt_adapter,
+        command_dispatcher=dispatcher,
         ai_service=gemini_adapter,
-        tts_service=tts_adapter,
-        default_record_seconds=10.0
+        tts_service=tts_adapter
     )
     
     # Inicializar monitor de progreso si el bus está activo
@@ -109,12 +108,12 @@ def build_assistant(
     if not isinstance(event_bus, NoOpEventBus):
         progress_monitor = ProgressMonitorService(scheduler, event_bus)
     
-    return assistant_service, progress_monitor, camera, voice_command_adapter
+    return assistant_service, progress_monitor, camera, voice_command_adapter, mic_adapter
 
 
 def build_gui_adapter(
-    event_bus: EventBusPort = None,
-    executor: TaskExecutorPort = None,
+    event_bus: Optional[EventBusPort] = None,
+    executor: Optional[TaskExecutorPort] = None,
     max_workers: int = 4,
     title: str = "Raspberry Friend",
     width: int = 800,
@@ -136,10 +135,11 @@ def build_gui_adapter(
     """
     if event_bus is None:
         event_bus = NoOpEventBus()
+    
     if executor is None:
         executor = ThreadPoolExecutorAdapter(max_workers=max_workers)
 
-    assistant_service, _, camera, voice_command_adapter = build_assistant(
+    assistant_service, _, camera, voice_command_adapter, mic_adapter = build_assistant(
         event_bus=event_bus,
         executor=executor,
         max_workers=max_workers
@@ -159,6 +159,6 @@ def build_gui_adapter(
     camera.set_clear_callback(gui_adapter.clear_camera_display)
     
     # Conectar el adaptador de voz al GUI
-    gui_adapter.set_voice_command_adapter(voice_command_adapter)
+    gui_adapter.set_voice_command_adapter(voice_command_adapter, mic_adapter)
     
     return gui_adapter

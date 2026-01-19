@@ -35,7 +35,7 @@ class TaskEventLogger:
             msg = "\n" + msg + "\n"
         
         self._logger.info(
-            message=f"✅ [{time}] {msg}",
+            message=f"[{time}] {msg}",
             extra={"task_id": ev.task_id}
         )
 
@@ -47,6 +47,6 @@ class TaskEventLogger:
             msg = "\n" + msg + "\n"
         
         self._logger.error(
-            message=f"❌ [{time}] {msg}",
+            message=f"[{time}] {msg}",
             extra={"task_id": ev.task_id}
         )

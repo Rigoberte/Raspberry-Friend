@@ -28,16 +28,16 @@ class ConsoleLoggerAdapter(LoggerPort):
     
     def debug(self, message: str, *, extra=None, replace=False) -> None:
         if self.__should_print__(LoggerLevel.DEBUG):
-            print_formatted_text(ANSI(self.__fmt__("[DEBUG]", message, replace, extra)))
+            print_formatted_text(ANSI(self.__fmt__("[🐞 DEBUG]", message, replace, extra)))
 
     def info(self, message: str, *, extra=None, replace=False) -> None:
         if self.__should_print__(LoggerLevel.INFO):
-            print_formatted_text(ANSI(self.__fmt__("[INFO]", message, replace, extra)))
+            print_formatted_text(ANSI(self.__fmt__("[ℹ️ INFO]", message, replace, extra)))
 
     def warning(self, message: str, *, extra=None, replace=False) -> None:
         if self.__should_print__(LoggerLevel.WARNING):
-            print_formatted_text(ANSI(self.__fmt__("[WARN]", message, replace, extra)))
+            print_formatted_text(ANSI(self.__fmt__("[⚠️ WARN]", message, replace, extra)))
             
     def error(self, message: str, *, extra=None, replace=False) -> None:
         if self.__should_print__(LoggerLevel.ERROR):
-            print_formatted_text(ANSI(self.__fmt__("[ERROR]", message, replace, extra)))
+            print_formatted_text(ANSI(self.__fmt__("[❌ ERROR]", message, replace, extra)))

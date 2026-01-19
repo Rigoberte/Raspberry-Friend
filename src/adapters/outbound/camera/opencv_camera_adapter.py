@@ -4,7 +4,7 @@ import time
 from typing import Callable, Optional
 from src.domain.ports.outbound.camera_ports import CameraPort
 
-CAMERA_INDEX = 0  # Default camera index
+CAMERA_INDEX = 1  # Default camera index
 
 class OpenCVCameraAdapter(CameraPort):
     """

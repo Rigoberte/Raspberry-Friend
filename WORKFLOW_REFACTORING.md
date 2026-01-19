@@ -9,7 +9,7 @@
 
 **Ahora:**
 - `listen_and_interpret_workflow`: Workflow que orquesta pasos
-- `InterpretAndRespondSkill`: Skill auxiliar que implementa el árbol de decisión
+- `InterpretAndRespondAudioSkill`: Skill auxiliar que implementa el árbol de decisión
 - Componentes desacoplados y reutilizables
 
 ---
@@ -39,7 +39,7 @@ listen_and_interpret_workflow
 
 ---
 
-### 🔄 Flujo de Decisión en `InterpretAndRespondSkill`
+### 🔄 Flujo de Decisión en `InterpretAndRespondAudioSkill`
 
 #### JSON de respuesta de Gemini:
 ```json
@@ -140,9 +140,9 @@ registry.register(listen_and_interpret)
 
 **Ahora:**
 ```python
-from src.application.use_cases.skills.interpret_and_respond_skill import InterpretAndRespondSkill
+from src.application.use_cases.skills.interpret_and_respond_skill import InterpretAndRespondAudioSkill
 
-interpret_and_respond = InterpretAndRespondSkill(
+interpret_and_respond = InterpretAndRespondAudioSkill(
     ai_service=gemini_adapter,
     tts_service=tts_adapter,
     command_dispatcher=dispatcher

@@ -3,6 +3,10 @@ from tkinter import scrolledtext
 from typing import Callable, Optional
 from PIL import Image, ImageTk
 import numpy as np
+import time
+import threading
+import cv2
+import sys
 
 
 class MessageType:
@@ -52,6 +56,11 @@ class GUIWindow:
         """
         self.on_command = on_command
         self.on_listen = None  # Callback para comandos por voz
+        self.on_listen_with_duration = None  # Callback con duración de grabación
+        self.listen_press_time = None  # Para medir duración de pulsación
+        self.on_listen_recording_done = None  # Callback cuando termina grabación interactiva
+        self.on_start_recording = None  # Callback para iniciar grabación
+        self.on_stop_recording = None  # Callback para detener grabación
         self.root = tk.Tk()
         self.root.title(title)
         self.root.geometry(f"{width}x{height}")
@@ -246,6 +255,10 @@ class GUIWindow:
             cursor="hand2",
         )
         self.listen_button.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # Binds para detectar press y release del botón
+        self.listen_button.bind("<ButtonPress-1>", self._on_listen_press)
+        self.listen_button.bind("<ButtonRelease-1>", self._on_listen_release)
 
         self.clear_button = tk.Button(
             button_frame,
@@ -285,7 +298,7 @@ class GUIWindow:
                 self.on_command(command)
 
     def _on_listen_clicked(self) -> None:
-        """Maneja el click del botón escuchar."""
+        """Maneja el click del botón escuchar (para retrocompatibilidad)."""
         if self.on_listen:
             self.add_output("🎤 Escuchando...", MessageType.INFO)
             # Deshabilitar botón mientras escucha
@@ -293,7 +306,6 @@ class GUIWindow:
             self.root.update()
             
             # Ejecutar callback en thread para no bloquear UI
-            import threading
             def listen_thread():
                 try:
                     self.on_listen()
@@ -303,6 +315,82 @@ class GUIWindow:
                         state=tk.NORMAL, 
                         text="🎤 Escuchar"
                     ))
+            
+            thread = threading.Thread(target=listen_thread, daemon=True)
+            thread.start()
+        else:
+            self.add_output("⚠️ Comandos por voz no configurados", MessageType.WARNING)
+
+    def _on_listen_press(self, event) -> None:
+        """Maneja cuando se presiona el botón de escucha - INICIA grabación."""
+        self.listen_press_time = time.time()
+        self.listen_button.config(bg="#7a3fa0", text="⏺️ Grabando...")
+        self.add_output("🎤 Presionado... grabando", MessageType.INFO)
+        
+        # Iniciar grabación si existe callback para ello
+        if self.on_start_recording:
+            self.on_start_recording()
+        
+        self.root.update()
+
+    def _on_listen_release(self, event) -> None:
+        """Maneja cuando se suelta el botón de escucha - DETIENE grabación."""
+        if self.listen_press_time is None:
+            self.listen_button.config(bg="#9b59b6", text="🎤 Escuchar")
+            return
+        
+        # Calcular duración exacta en segundos
+        duration = time.time() - self.listen_press_time
+        self.listen_press_time = None
+        self.listen_button.config(bg="#9b59b6", text="🎤 Escuchar")
+        
+        # Detener grabación y procesar
+        if self.on_stop_recording or self.on_listen_recording_done:
+            self.add_output(f"🎤 Grabó {duration:.2f} segundos. Procesando...", MessageType.INFO)
+            self.listen_button.config(state=tk.DISABLED)
+            self.root.update()
+            
+            # Ejecutar callbacks en thread para no bloquear UI
+            def listen_thread():
+                try:
+                    # Primero detener la grabación
+                    if self.on_stop_recording:
+                        self.on_stop_recording()
+                    # Luego procesar
+                    if self.on_listen_recording_done:
+                        self.on_listen_recording_done()
+                finally:
+                    # Re-habilitar botón
+                    self.root.after(0, lambda: self.listen_button.config(state=tk.NORMAL))
+            
+            thread = threading.Thread(target=listen_thread, daemon=True)
+            thread.start()
+        elif self.on_listen_with_duration:
+            self.add_output(f"🎤 Grabó {duration:.2f} segundos. Procesando...", MessageType.INFO)
+            self.listen_button.config(state=tk.DISABLED)
+            self.root.update()
+            
+            # Ejecutar callback en thread para no bloquear UI
+            def listen_thread():
+                try:
+                    self.on_listen_with_duration(duration)
+                finally:
+                    # Re-habilitar botón
+                    self.root.after(0, lambda: self.listen_button.config(state=tk.NORMAL))
+            
+            thread = threading.Thread(target=listen_thread, daemon=True)
+            thread.start()
+        elif self.on_listen:
+            # Retrocompatibilidad: usar callback antiguo sin duración
+            self.add_output("🎤 Escuchando...", MessageType.INFO)
+            self.listen_button.config(state=tk.DISABLED)
+            self.root.update()
+            
+            def listen_thread():
+                try:
+                    self.on_listen()
+                finally:
+                    self.root.after(0, lambda: self.listen_button.config(state=tk.NORMAL))
             
             thread = threading.Thread(target=listen_thread, daemon=True)
             thread.start()
@@ -343,7 +431,6 @@ class GUIWindow:
     
     def _on_closing(self) -> None:
         """Maneja el evento de cierre de ventana."""
-        import sys
         self.root.quit()
         self.root.destroy()
         sys.exit(0)
@@ -359,7 +446,6 @@ class GUIWindow:
             # Convertir BGR a RGB si es necesario
             if len(frame.shape) == 3 and frame.shape[2] == 3:
                 # Asumir BGR de OpenCV y convertir a RGB
-                import cv2
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             else:
                 frame_rgb = frame

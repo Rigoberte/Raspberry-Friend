@@ -1,4 +1,5 @@
-from typing import Optional
+from typing import Optional, Union
+from google import genai
 
 from src.domain.ports.outbound.ai_chatbot_ports import AI_ChatBotPort
 
@@ -21,11 +22,45 @@ class GeminiAdapter(AI_ChatBotPort):
         self.timeout = timeout
         self._client = None
 
-    def generate_text(self, prompt: str) -> dict[str, str | bool]:
-        if not prompt or not prompt.strip():
+    def generate_text(
+            self, 
+            contents: Union[str, list]
+        ) -> dict[str, str | bool]:
+        """
+        Genera contenido a partir de uno o más elementos (texto, audio, imágenes, etc).
+        
+        Args:
+            contents: Puede ser:
+                - str: Un prompt de texto
+                - list: Lista de elementos genai_types.Part (audio, imagen, etc)
+                - list: Mezcla de str y genai_types.Part, ej: [prompt_str, audio_part]
+        
+        Returns:
+            Dict con keys:
+                - success: bool
+                - message: str con el contenido o error
+        
+        """
+        if not contents:
             return {
                 "success": False,
-                "message": "El prompt no puede estar vacío. Ejemplo: 'gemini escribe un poema'.",
+                "message": "El contenido no puede estar vacío.",
+            }
+
+        # Normalizar contents a lista
+        if isinstance(contents, str):
+            if not contents.strip():
+                return {
+                    "success": False,
+                    "message": "El prompt no puede estar vacío.",
+                }
+            contents_list = [contents]
+        elif isinstance(contents, list):
+            contents_list = contents
+        else:
+            return {
+                "success": False,
+                "message": f"Tipo de contenido no válido: {type(contents)}",
             }
 
         try:
@@ -36,7 +71,7 @@ class GeminiAdapter(AI_ChatBotPort):
         try:
             response = client.models.generate_content(
                 model=self.model,
-                contents=[prompt],
+                contents=contents_list,
             )
 
             text_chunks: list[str] = []
@@ -62,7 +97,7 @@ class GeminiAdapter(AI_ChatBotPort):
         except Exception as exc:  # noqa: BLE001
             return {"success": False, "message": f"Error llamando a Gemini: {exc}"}
 
-    def _get_client(self):
+    def _get_client(self) -> genai.Client:
         if self._client is not None:
             return self._client
 
@@ -76,13 +111,6 @@ class GeminiAdapter(AI_ChatBotPort):
             raise ValueError(
                 "Falta la API key de Gemini. Define GOOGLE_API_KEY (recomendado) o GOOGLE_GENAI_API_KEY, o pásala al adapter."
             )
-
-        try:
-            from google import genai
-        except Exception as exc:  # noqa: BLE001
-            raise RuntimeError(
-                "Dependencia google-genai no instalada. Ejecuta 'pip install google-genai'."
-            ) from exc
 
         self._client = genai.Client(api_key=api_key.strip())
         return self._client
