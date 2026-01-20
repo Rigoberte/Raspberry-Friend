@@ -267,7 +267,7 @@ class GUIWindow:
 
     def _configure_text_tags(self) -> None:
         """Configura los tags de colores para diferentes tipos de mensajes."""
-        #self.output_text.tag_configure(MessageType.USER_INPUT, foreground=self.COLOR_USER, font=("Courier New", 10, "bold"))
+        self.output_text.tag_configure(LoggerLevel.USER_INPUT, foreground=self.COLOR_USER, font=("Courier New", 10, "bold"))
         #self.output_text.tag_configure(LoggerLevel.INFO, foreground=self.COLOR_RESPONSE)
         self.output_text.tag_configure(LoggerLevel.DEBUG, foreground=self.COLOR_RESPONSE)
         self.output_text.tag_configure(LoggerLevel.ERROR, foreground=self.COLOR_ERROR, font=("Courier New", 10, "bold"))
@@ -283,7 +283,7 @@ class GUIWindow:
         """Maneja el click del botón enviar."""
         command = self.input_text.get().strip()
         if command:
-            self.add_output(f"> {command}", LoggerLevel.INFO)
+            self.add_output(f"> {command}", LoggerLevel.USER_INPUT)
             self.input_text.delete(0, tk.END)
             self.input_text.focus()
             if self.on_command:

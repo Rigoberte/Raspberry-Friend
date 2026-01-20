@@ -15,13 +15,16 @@ from src.application.use_cases.workflows.transcribe_me_workflow import build_tra
 
 
 class CommandToTask:
-    def __init__(self, policy_parser: SchedulingPolicyParser) -> None:
-        self._policy_parser = policy_parser
+    def __init__(self) -> None:
+        self._policy_parser = SchedulingPolicyParser()
         
         self._workflow_builders: dict[str, Callable[[Command], Task]] = {
             "play-song": build_play_song_workflow,
             "transcribe-me": build_transcribe_me_workflow,
         }
+
+    def list_workflow_commands(self) -> list[str]:
+        return list(self._workflow_builders.keys())
 
     def build(self, command: Command) -> Task:
         name = command.get_name()

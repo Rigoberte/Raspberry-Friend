@@ -17,7 +17,7 @@ class GUILoggerAdapter(LoggerPort):
 
     def info(self, message: str, *, extra=None, replace=False) -> None:
         if self.__should_print__(LoggerLevel.INFO):
-            text = self.__fmt__("[ⓘ INFO]", message, replace, extra)
+            text = self.__fmt__("[ⓘ INFO]", message, replace, None) #, extra)
             self.gui_window.add_output(text, LoggerLevel.INFO)
 
     def warning(self, message: str, *, extra=None, replace=False) -> None:
@@ -29,6 +29,11 @@ class GUILoggerAdapter(LoggerPort):
         if self.__should_print__(LoggerLevel.ERROR):
             text = self.__fmt__("[❌ ERROR]", message, replace, extra)
             self.gui_window.add_output(text, LoggerLevel.ERROR)
+
+    def user_input(self, message: str, *, extra=None, replace=False) -> None:
+        if self.__should_print__(LoggerLevel.USER_INPUT):
+            text = self.__fmt__("[📝 USER INPUT]", message, replace, extra)
+            self.gui_window.add_output(text, LoggerLevel.USER_INPUT)
 
     def __should_print__(self, level: LoggerLevel) -> bool:
         return level >= self.level

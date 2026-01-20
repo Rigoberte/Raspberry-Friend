@@ -10,6 +10,9 @@ class RobotSkill(ABC):
     
     def supported_commands(self) -> list[str]:
         return list(self._commands.keys())
+    
+    def get_command_descriptions(self) -> dict[str, str]:
+        return dict(self._commands)
 
     @abstractmethod
     def handle(self, command: Command) -> CommandResult:

@@ -38,38 +38,80 @@ El robot tiene los siguientes comandos disponibles:
 - list-tasks: Lista tareas activas
 - file-explorer <ruta>: Explora archivos
 
+POLÍTICAS DE PROGRAMACIÓN:
+Las tareas pueden programarse usando estos formatos en el campo "text" de task_args:
+- "-at: HH:MM" → Ejecutar a una hora específica (ej: "-at: 18:00")
+- "-at: DD-MM HH:MM" → Ejecutar en fecha y hora específica (ej: "-at: 25-12 09:00")
+- "-every: <cantidad><unidad>" → Ejecutar cada intervalo de tiempo:
+  * s = segundos (ej: "-every: 30s")
+  * m = minutos (ej: "-every: 5m")
+  * h = horas (ej: "-every: 2h")
+  * d = días (ej: "-every: 1d")
+  * w = semanas (ej: "-every: 1w")
+  * M = meses (ej: "-every: 1M")
+  * y = años (ej: "-every: 1y")
+- "-max: <número>" → Limitar número máximo de ejecuciones (ej: "-every: 1h -max: 5")
+- "-while: <condición>" → Ejecutar continuamente mientras se cumpla condición (ej: "-every: 30s -while: true")
+
+Ejemplos de programación:
+- "Decime la hora a las 6 de la tarde" → {"text": "-at: 18:00"}
+- "Decime el clima cada 2 horas" → {"text": "Madrid -every: 2h"}
+- "Poneme música cada 30 minutos, máximo 3 veces" → {"text": "canción -every: 30m -max: 3"}
+
+Nota: 
+- En el caso que no se especifique política, la tarea se ejecuta inmediatamente, por lo que no es necesario agregar "-at:" o "-every:".
+
+MÚLTIPLES TAREAS Y CONSULTAS:
+El usuario puede combinar TAREAS (comandos del robot) y CONSULTAS GENERALES en una misma frase.
+Debes analizar cada elemento por separado y devolver un array "items" donde cada elemento puede ser:
+- Una TAREA: is_task=true, task_name y task_args poblados, response=null
+- Una CONSULTA: is_task=false, task_name=null, task_args=null, response poblado
+
 INSTRUCCIONES:
-1. Analiza si la frase del usuario es una SOLICITUD DE TAREA (comando) o una CONSULTA GENERAL
-2. Si es TAREA: Devuelve is_task=true con el comando correspondiente
-3. Si es CONSULTA GENERAL: Devuelve is_task=false Y proporciona la respuesta directamente
+1. Analiza TODA la frase del usuario identificando tanto TAREAS como CONSULTAS GENERALES
+2. Para cada elemento (tarea o consulta), crea un item en el array "items"
+3. Cada item se procesa independientemente según su campo "is_task"
 
 PRIORIDAD CLIMA:
-- Si el usuario pide clima/tiempo/temperatura/pronóstico/"weather" y menciona o implica una ciudad, SIEMPRE debe devolver is_task=true con task_name="weather" y task_args {"text": "<ciudad>"}. Nunca respondas directo en "response" para estas consultas; usa el comando weather.
+- Si el usuario pide clima/tiempo/temperatura/pronóstico/"weather" y menciona o implica una ciudad, SIEMPRE debe ser una TAREA con is_task=true, task_name="weather" y task_args {"text": "<ciudad>"}.
 
 Responde SOLO con un JSON válido sin markdown (no uses ```json):
 {{
-    "is_task": true/false,
-    "task_name": "nombre-del-comando" o null,
-    "task_args": {{"text": "argumentos"}} o null,
-    "response": "respuesta si es consulta, null si es tarea",
+    "items": [
+        {{"is_task": true/false, "task_name": "comando" o null, "task_args": {{"text": "args"}} o null, "response": "texto" o null}}
+    ],
     "interpretation": "Brief explanation in English"
 }}
 
 Ejemplos:
+
+1. SOLO TAREA:
 - Usuario: "Che, por favor poneme la canción 'No tengo ganas' de Pity A"
-    Respuesta: {{"is_task": true, "task_name": "play-song", "task_args": {{"text": "No tengo ganas Pity A"}}, "response": null, "interpretation": "Wants to play a song"}}
+    Respuesta: {{"items": [{{"is_task": true, "task_name": "play-song", "task_args": {{"text": "No tengo ganas Pity A"}}, "response": null}}], "interpretation": "Wants to play a song"}}
 
+- Usuario: "Decime que hora es a las 18 horas"
+    Respuesta: {{"items": [{{"is_task": true, "task_name": "time", "task_args": {{"text": "-at: 18:00"}}, "response": null}}], "interpretation": "Wants to know the time scheduled at 6 PM"}}
+
+2. MÚLTIPLES TAREAS:
+- Usuario: "Decime que hora es y cual es el clima"
+    Respuesta: {{"items": [{{"is_task": true, "task_name": "time", "task_args": {{"text": ""}}, "response": null}}, {{"is_task": true, "task_name": "weather", "task_args": {{"text": ""}}, "response": null}}], "interpretation": "Wants to know the time and weather"}}
+
+- Usuario: "Cada 30 minutos decime la hora, máximo 5 veces"
+    Respuesta: {{"items": [{{"is_task": true, "task_name": "time", "task_args": {{"text": "-every: 30m -max: 5"}}, "response": null}}], "interpretation": "Wants time announcements every 30 minutes, max 5 times"}}
+
+3. SOLO CONSULTA:
 - Usuario: "¿Cuántas copas del mundo ganó Argentina?"
-    Respuesta: {{"is_task": false, "task_name": null, "task_args": null, "response": "Argentina ganó 3 Copas del Mundo: 1978, 1986 y 2022.", "interpretation": "General query about history"}}
-
-- Usuario: "¿Cuál es el clima en Madrid?"
-    Respuesta: {{"is_task": true, "task_name": "weather", "task_args": {{"text": "Madrid"}}, "response": null, "interpretation": "Wants to know the weather in a specific city"}}
-
-- Usuario: "Silencia la música"
-    Respuesta: {{"is_task": true, "task_name": "stop-song", "task_args": {{"text": ""}}, "response": null, "interpretation": "Wants to stop the music"}}
+    Respuesta: {{"items": [{{"is_task": false, "task_name": null, "task_args": null, "response": "Argentina ganó 3 Copas del Mundo: 1978, 1986 y 2022."}}], "interpretation": "General query about history"}}
 
 - Usuario: "¿A qué hora abre el supermercado?"
-    Respuesta: {{"is_task": false, "task_name": null, "task_args": null, "response": "Los horarios varían según la ubicación. Generalmente los supermercados abren de 8am a 9pm.", "interpretation": "General query about business hours"}}
+    Respuesta: {{"items": [{{"is_task": false, "task_name": null, "task_args": null, "response": "Los horarios varían según la ubicación. Generalmente los supermercados abren de 8am a 9pm."}}], "interpretation": "General query about business hours"}}
+
+4. TAREA + CONSULTA (MIXTO):
+- Usuario: "Decime que hora es y ¿cuántas copas del mundo ganó Argentina?"
+    Respuesta: {{"items": [{{"is_task": true, "task_name": "time", "task_args": {{"text": ""}}, "response": null}}, {{"is_task": false, "task_name": null, "task_args": null, "response": "Argentina ganó 3 Copas del Mundo: 1978, 1986 y 2022."}}], "interpretation": "Wants to know the time (task) and asks about Argentina's World Cups (general query)"}}
+
+- Usuario: "Poneme música y decime cuál es la capital de Francia"
+    Respuesta: {{"items": [{{"is_task": true, "task_name": "play-song", "task_args": {{"text": ""}}, "response": null}}, {{"is_task": false, "task_name": null, "task_args": null, "response": "La capital de Francia es París."}}], "interpretation": "Wants music (task) and asks about France's capital (general query)"}}
 
 IMPORTANTE: Responde SOLO con el JSON, sin explicaciones adicionales. Y siempre las respuestas deben estar en ESPAÑOL.
 """.strip()
@@ -118,9 +160,16 @@ class VoiceCommandAdapter:
             }
 
         data = result.get_data() or {}
-        is_task = bool(data.get("is_task", False))
-        task_name = data.get("task_name", "")
-        response_payload = data.get("task_result") or data.get("response") or result.get_message()
+        
+        # Extraer información
+        items = data.get("items", [])
+        executed_tasks = data.get("executed_tasks", [])
+        response_parts = data.get("response_parts", [])
+        
+        # Construir valores para compatibilidad
+        task_name = ", ".join(executed_tasks) if executed_tasks else ""
+        is_task = len(executed_tasks) > 0
+        response_payload = result.get_message()
         interpretation_text = data.get("interpretation")
         transcript = data.get("transcript", "")
 
@@ -179,66 +228,93 @@ class VoiceCommandAdapter:
                     data={"raw_response": raw_response}
                 )
             
-            is_task = interpretation_data.get("is_task", False)
-            task_name = interpretation_data.get("task_name")
-            task_args = interpretation_data.get("task_args") or {}
-            if not isinstance(task_args, dict):
-                # Normalizar task_args a dict para evitar errores aguas abajo
-                task_args = {"text": str(task_args)}
-            response_text = interpretation_data.get("response")
+            # Extraer array de items
+            items = interpretation_data.get("items", [])
             interpretation_text = interpretation_data.get("interpretation", "")
             
-            # ===== Árbol de decisión =====
-            if is_task and task_name and self._assistant_service:
-                # Es una tarea: ejecutar
-                task_command = Command(task_name, task_args)
-                try:
-                    self._assistant_service.handle_command(task_command)
-                except Exception as exc:  # noqa: BLE001
-                    error_response = f"Error ejecutando tarea {task_name}: {exc}"
-                    self._speak_response(error_response)
-                    return CommandResult(
-                        success=False,
-                        message=f"❌ {error_response}",
-                        data={
-                            "is_task": True,
-                            "task_name": task_name,
-                            "task_args": task_args,
-                            "interpretation": interpretation_text,
-                        }
-                    )
+            # Compatibilidad: Si no hay items pero hay campos legacy, crear un item
+            if not items:
+                is_task = interpretation_data.get("is_task", False)
+                task_name = interpretation_data.get("task_name")
+                task_args = interpretation_data.get("task_args")
+                response_text = interpretation_data.get("response")
                 
-                message = f"Tarea agregada: {task_name}"
-                self._speak_response(message)
-
-                return CommandResult(
-                    success=True,
-                    message=message,
-                    data={
-                        "is_task": True,
-                        "task_name": task_name,
-                        "task_args": task_args,
-                        "task_result": f"La tarea '{task_name}' ha sido agregada para su ejecución.",
-                        "interpretation": interpretation_text,
-                    }
-                )
-            else:
-                # Es una consulta: responder directamente
-                if not response_text:
-                    response_text = "Lo siento, no pude obtener una respuesta en este momento."
+                if is_task and task_name:
+                    items = [{"is_task": True, "task_name": task_name, "task_args": task_args, "response": None}]
+                elif response_text:
+                    items = [{"is_task": False, "task_name": None, "task_args": None, "response": response_text}]
+            
+            if not items:
+                # No hay items, fallback a respuesta genérica
+                items = [{"is_task": False, "task_name": None, "task_args": None, "response": "Lo siento, no entendí tu solicitud."}]
+            
+            # ===== Procesar cada item individualmente =====
+            executed_tasks = []
+            errors = []
+            response_parts = []
+            
+            for item in items:
+                is_task = item.get("is_task", False)
                 
-                # Reproducir respuesta por voz
-                self._speak_response(response_text)
-                
-                return CommandResult(
-                    success=True,
-                    message=f"💬 {response_text}",
-                    data={
-                        "is_task": False,
-                        "response": response_text,
-                        "interpretation": interpretation_text,
-                    }
-                )
+                if is_task:
+                    # Es una TAREA
+                    task_name = item.get("task_name")
+                    task_args = item.get("task_args") or {}
+                    
+                    if not isinstance(task_args, dict):
+                        task_args = {"text": str(task_args)}
+                    
+                    if task_name and self._assistant_service:
+                        task_command = Command(task_name, task_args)
+                        try:
+                            self._assistant_service.handle_command(task_command)
+                            executed_tasks.append(task_name)
+                        except Exception as exc:  # noqa: BLE001
+                            error_msg = f"Error ejecutando {task_name}: {exc}"
+                            errors.append(error_msg)
+                else:
+                    # Es una CONSULTA
+                    response_text = item.get("response")
+                    if response_text:
+                        response_parts.append(response_text)
+            
+            # ===== Construir mensaje final =====
+            final_parts = []
+            
+            # Agregar mensaje de tareas ejecutadas
+            if executed_tasks:
+                if len(executed_tasks) == 1:
+                    final_parts.append(f"Tarea agregada: {executed_tasks[0]}")
+                else:
+                    final_parts.append(f"Tareas agregadas: {', '.join(executed_tasks)}")
+            
+            # Agregar errores si los hay
+            if errors:
+                final_parts.append(f"Errores: {'; '.join(errors)}")
+            
+            # Agregar respuestas a consultas
+            final_parts.extend(response_parts)
+            
+            # Combinar todo
+            final_message = ". ".join(final_parts) if final_parts else "Solicitud procesada."
+            
+            # Reproducir respuesta por voz
+            self._speak_response(final_message)
+            
+            # Determinar éxito: al menos una tarea ejecutada o una respuesta
+            success = len(executed_tasks) > 0 or len(response_parts) > 0
+            
+            return CommandResult(
+                success=success,
+                message=final_message,
+                data={
+                    "items": items,
+                    "executed_tasks": executed_tasks,
+                    "errors": errors,
+                    "response_parts": response_parts,
+                    "interpretation": interpretation_text,
+                }
+            )
         except Exception as exc:  # noqa: BLE001
             # Captura cualquier error inesperado para no romper el flujo de voz
             return CommandResult(

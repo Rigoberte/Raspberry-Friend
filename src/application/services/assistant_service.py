@@ -3,15 +3,13 @@ from src.application.services.task_scheduler import TaskScheduler
 from src.domain.models.command import Command
 from src.domain.models.task import Task
 
-from src.application.services.scheduling_policy_parser import SchedulingPolicyParser
 from src.application.services.command_to_task import CommandToTask
 
 class AssistantService:
     def __init__(self, registry: SkillRegistry, scheduler: TaskScheduler) -> None:
         self._registry = registry
         self._scheduler = scheduler
-        self._policy_parser = SchedulingPolicyParser()
-        self._command_to_task = CommandToTask(self._policy_parser)
+        self._command_to_task = CommandToTask()
     
     def handle_command(self, command: Command) -> None:
         task = self._command_to_task.build(command)
@@ -22,7 +20,7 @@ class AssistantService:
         return self._scheduler.list_tasks()
     
     def list_skills(self) -> list[str]:
-        return self._registry.list_skills()
+        return sorted(self._registry.list_skills() + self._command_to_task.list_workflow_commands())
     
     def stop(self) -> None:
         self._scheduler.stop()

@@ -50,7 +50,7 @@ class ExecuteCommandUseCase:
         try:
             command = Command(command_name, args)
             self._assistant.handle_command(command)
-            self._logger.info(f"Comando '{command_name}' procesado exitosamente")
+            self._logger.debug(f"Comando '{command_name}' procesado exitosamente")
             
         except Exception as e:
             self._logger.error(f"Error al ejecutar comando '{command_name}': {str(e)}")

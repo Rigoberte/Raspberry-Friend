@@ -8,6 +8,7 @@ class LoggerLevel(IntEnum):
     INFO = 2
     WARNING = 3
     ERROR = 4
+    USER_INPUT = 5
 
 class TaskEventLogger:
     def __init__(self, logger: LoggerPort) -> None:
