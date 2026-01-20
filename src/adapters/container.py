@@ -4,20 +4,6 @@ from src.application.services.assistant_service import AssistantService
 from src.application.services.command_dispatcher import CommandDispatcher
 from src.application.services.progress_monitor_service import ProgressMonitorService
 from src.application.events.event_bus import NoOpEventBus
-
-from src.domain.ports.outbound.event_bus_ports import EventBusPort
-from src.domain.ports.outbound.task_executor_ports import TaskExecutorPort
-
-from src.adapters.outbound.weather.real_weather_adapter import RealWeatherPort
-from src.adapters.outbound.music_player.pygame_music_player_adapter import PygameMusicPlayerPort
-from src.adapters.outbound.task_executor.thread_pool_executor_adapter import ThreadPoolExecutorAdapter
-from src.adapters.outbound.camera.opencv_camera_adapter import OpenCVCameraAdapter
-from src.adapters.outbound.ai_chatbot.gemini_adapter import GeminiAdapter
-from src.adapters.outbound.tts.pyttsx3_tts_adapter import Pyttsx3TTSAdapter
-from src.adapters.outbound.microphone.microphone_adapter import MicrophoneAdapter
-from src.adapters.outbound.transcription.gemini_transcription_adapter import GeminiTranscriptionAdapter
-from src.adapters.inbound.gui.gui_adapter import GUIAdapter
-
 from src.application.use_cases.skills.weather_skill import WeatherSkill
 from src.application.use_cases.skills.echo_skill import EchoSkill
 from src.application.use_cases.skills.time_skill import TimeSkill
@@ -31,9 +17,23 @@ from src.application.use_cases.skills.ai_chatbot_skill import AI_ChatbotSkill
 from src.application.use_cases.skills.say_skill import SaySkill
 from src.application.use_cases.skills.record_audio_skill import RecordAudioSkill
 from src.application.use_cases.skills.transcribe_skill import TranscribeSkill
+from src.application.events.event_bus import InMemoryEventBus
+
+from src.domain.ports.outbound.event_bus_ports import EventBusPort
+from src.domain.ports.outbound.task_executor_ports import TaskExecutorPort
+
+from src.adapters.outbound.weather.real_weather_adapter import RealWeatherPort
+from src.adapters.outbound.music_player.pygame_music_player_adapter import PygameMusicPlayerPort
+from src.adapters.outbound.task_executor.thread_pool_executor_adapter import ThreadPoolExecutorAdapter
+from src.adapters.outbound.camera.opencv_camera_adapter import OpenCVCameraAdapter
+from src.adapters.outbound.ai_chatbot.gemini_adapter import GeminiAdapter
+from src.adapters.outbound.tts.pyttsx3_tts_adapter import Pyttsx3TTSAdapter
+from src.adapters.outbound.microphone.microphone_adapter import MicrophoneAdapter
+from src.adapters.outbound.transcription.gemini_transcription_adapter import GeminiTranscriptionAdapter
+from src.adapters.outbound.logger.gui_logger_adapter import GUILoggerAdapter
+from src.adapters.inbound.gui.gui_adapter import GUIAdapter
 from src.adapters.inbound.voice_command import VoiceCommandAdapter
 
-from typing import Optional
 
 BRANCH = "develop" # TODO: Detect dynamically based on environment
 
@@ -43,27 +43,19 @@ else:
     from src.configs.configs import Configs
 
 def build_assistant(
-    event_bus: EventBusPort = None,
-    executor: TaskExecutorPort = None,
-    max_workers: int = 4
-) -> tuple[AssistantService, ProgressMonitorService | None, OpenCVCameraAdapter | None, VoiceCommandAdapter, MicrophoneAdapter]:
+    event_bus: EventBusPort,
+    executor: TaskExecutorPort
+) -> tuple[AssistantService, OpenCVCameraAdapter, VoiceCommandAdapter, MicrophoneAdapter]:
     """
     Construye e inyecta todas las dependencias del AssistantService.
     
     Args:
         event_bus: Implementación del EventBus (por defecto NoOpEventBus)
         executor: Implementación del TaskExecutor (por defecto ThreadPoolExecutorAdapter)
-        max_workers: Número de workers para el executor si no se proporciona uno
-    
+
     Returns:
         Tupla (AssistantService, ProgressMonitorService, OpenCVCameraAdapter)
     """
-    if event_bus is None:
-        event_bus = NoOpEventBus()
-    
-    if executor is None:
-        executor = ThreadPoolExecutorAdapter(max_workers=max_workers)
-    
     music_player = PygameMusicPlayerPort(event_bus=event_bus)
     camera = OpenCVCameraAdapter()
     gemini_adapter = GeminiAdapter(api_key=Configs.GEMINI_API_KEY.value)
@@ -98,7 +90,7 @@ def build_assistant(
     
     # Inbound Adapter: Voice Command (comandos por voz)
     voice_command_adapter = VoiceCommandAdapter(
-        command_dispatcher=dispatcher,
+        assistant_service=assistant_service,
         ai_service=gemini_adapter,
         tts_service=tts_adapter
     )
@@ -108,23 +100,19 @@ def build_assistant(
     if not isinstance(event_bus, NoOpEventBus):
         progress_monitor = ProgressMonitorService(scheduler, event_bus)
     
-    return assistant_service, progress_monitor, camera, voice_command_adapter, mic_adapter
+    return assistant_service, camera, voice_command_adapter, mic_adapter
 
 
 def build_gui_adapter(
-    event_bus: Optional[EventBusPort] = None,
-    executor: Optional[TaskExecutorPort] = None,
-    max_workers: int = 4,
-    title: str = "Raspberry Friend",
-    width: int = 800,
-    height: int = 600,
-) -> GUIAdapter:
+        max_workers: int,
+        title: str,
+        width: int,
+        height: int
+    ) -> GUIAdapter:
     """
     Construye el adaptador GUI con todas las dependencias.
     
     Args:
-        event_bus: Implementación del EventBus
-        executor: Implementación del TaskExecutor
         max_workers: Número de workers para el executor
         title: Título de la ventana GUI
         width: Ancho de la ventana
@@ -133,32 +121,28 @@ def build_gui_adapter(
     Returns:
         GUIAdapter configurado y listo para usar
     """
-    if event_bus is None:
-        event_bus = NoOpEventBus()
-    
-    if executor is None:
-        executor = ThreadPoolExecutorAdapter(max_workers=max_workers)
+    event_bus = InMemoryEventBus()
+    executor = ThreadPoolExecutorAdapter(max_workers=max_workers)
 
-    assistant_service, _, camera, voice_command_adapter, mic_adapter = build_assistant(
+    assistant_service, camera, voice_command_adapter, mic_adapter = build_assistant(
         event_bus=event_bus,
-        executor=executor,
-        max_workers=max_workers
+        executor=executor
     )
-    
-    # Crear adaptador GUI
+
     gui_adapter = GUIAdapter(
         assistant_service=assistant_service,
         event_bus=event_bus,
         title=title,
         width=width,
-        height=height,
+        height=height
     )
     
-    # Conectar la cámara al GUI para que envíe frames y limpie al detener
     camera.set_frame_callback(gui_adapter.display_camera_frame)
     camera.set_clear_callback(gui_adapter.clear_camera_display)
     
-    # Conectar el adaptador de voz al GUI
     gui_adapter.set_voice_command_adapter(voice_command_adapter, mic_adapter)
+
+    gui_adapter.logger.info("Bienvenido a Raspberry Friend") # TODO: SACAR ESTO
+    gui_adapter.logger.info("Escribe un comando para comenzar (ej: 'echo Hola')")
     
     return gui_adapter

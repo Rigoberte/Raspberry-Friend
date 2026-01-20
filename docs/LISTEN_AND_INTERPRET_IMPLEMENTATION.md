@@ -1,17 +1,17 @@
-# 🎤 Resumen: Sistema Listen-and-Interpret Implementado
+# 🎤 Resumen: Sistema Voice Command Implementado
 
 ## ✅ Estado: COMPLETO Y FUNCIONAL
 
-Se ha implementado un sistema completo de **diálogo natural** que permite interactuar con Raspberry Friend hablando como lo harías normalmente.
+Se ha implementado un sistema completo de **diálogo natural** que permite interactuar con Raspberry Friend hablando como lo harías normalmente a través del **VoiceCommandAdapter**.
 
 ---
 
 ## 🎯 ¿Qué hace?
 
-El comando `listen-to-me` realiza un flujo completo:
+El **botón 🎤 Escuchar** en la GUI realiza un flujo completo:
 
-1. **Escucha** 🎤 - Graba audio del micrófono (default 10 segundos)
-2. **Transcribe** 📝 - Convierte audio a texto con Gemini STT
+1. **Escucha** 🎤 - Graba audio mientras mantienes presionado el botón
+2. **Transcribe** 📝 - Convierte audio a texto con Gemini STT (usando el propio audio)
 3. **Interpreta** 🧠 - Usa Gemini para entender si es tarea o consulta
 4. **Ejecuta** ⚡ - Ejecuta la tarea O consulta Gemini
 5. **Responde** 🔊 - Reproduce la respuesta por voz (TTS)
@@ -52,14 +52,17 @@ Responde: "Argentina ganó 3 Copas del Mundo..." (por voz)
 
 ## 🏗️ Arquitectura Implementada
 
-### Nuevo Skill: ListenAndInterpretSkill
+### Componente Principal: VoiceCommandAdapter
 
-**Ubicación:** `src/application/use_cases/skills/listen_and_interpret_skill.py`
+**Ubicación:** `src/adapters/inbound/voice_command/voice_command_adapter.py`
 
 **Características:**
-- ✅ Integrado con el sistema de skills existente
-- ✅ Usa todos los servicios del robot (mic, transcription, AI, TTS)
-- ✅ Ejecuta comandos a través del dispatcher
+- ✅ Adaptador inbound que conecta la GUI con el sistema de comandos
+- ✅ Usa MicrophoneAdapter para grabar (start/stop recording)
+- ✅ Usa GeminiTranscriptionAdapter para transcribir
+- ✅ Usa GeminiAdapter para interpretar y responder
+- ✅ Usa Pyttsx3TTSAdapter para reproducir respuestas
+- ✅ Ejecuta comandos a través del AssistantService
 - ✅ Manejo robusto de errores
 - ✅ JSON parsing inteligente para respuestas de Gemini
 
@@ -69,18 +72,20 @@ Responde: "Argentina ganó 3 Copas del Mundo..." (por voz)
 
 Se agregó:
 ```python
-from src.application.use_cases.skills.listen_and_interpret_skill import ListenAndInterpretSkill
+from src.adapters.inbound.voice_command import VoiceCommandAdapter
 
 # En build_assistant():
-listen_and_interpret = ListenAndInterpretSkill(
-    mic_service=mic_adapter,
-    transcription_service=stt_adapter,
+voice_command_adapter = VoiceCommandAdapter(
+    assistant_service=assistant_service,
     ai_service=gemini_adapter,
-    tts_service=tts_adapter,
-    command_dispatcher=dispatcher,
-    default_record_seconds=10.0
+    tts_service=tts_adapter
 )
-registry.register(listen_and_interpret)
+
+# Luego en build_gui_adapter():
+gui_adapter.set_voice_command_adapter(
+    voice_command_adapter=voice_command_adapter,
+    mic_adapter=mic_adapter
+)
 ```
 
 ---
@@ -98,8 +103,8 @@ El sistema puede interpretar solicitudes para:
 - `previous-song` - Anterior
 
 ### 🎥 Cámara
-- `camera-on` / `camera-off` - Enciende/apaga
-- `track-face` / `untrack-face` - Rastrea rostro
+- `turn-on-camera` / `turn-off-camera` - Enciende/apaga
+- `track-my-face` / `untrack-my-face` - Rastrea rostro
 
 ### 🎙️ Audio
 - `record-audio` - Graba audio
@@ -124,22 +129,12 @@ El sistema puede interpretar solicitudes para:
 
 ### Desde la GUI
 
-```
-listen-to-me                    (10 segundos por defecto)
-listen-to-me 15                 (15 segundos personalizados)
-```
+1. **Presiona y mantén** el botón 🎤 Escuchar
+2. **Habla** tu comando o consulta
+3. **Suelta** el botón
+4. El sistema procesa y responde automáticamente
 
-### Desde Python
-
-```python
-from src.domain.models.command import Command
-
-command = Command("listen-to-me", {"text": "10"})
-result = assistant.dispatcher.handle(command)
-
-if result.is_successful():
-    print(result.get_message())
-```
+> La duración de grabación = tiempo que mantienes presionado el botón
 
 ---
 
@@ -147,13 +142,23 @@ if result.is_successful():
 
 ```
 ┌─────────────────────────────────────────────────┐
-│ Usuario activa "listen-to-me"                   │
+│ Usuario presiona botón 🎤 Escuchar              │
 └──────────────────────┬──────────────────────────┘
                        ↓
         ┌──────────────────────────────┐
-        │ 1. Grabar Audio (Micrófono)  │
-        │    - Duración: 10s (default) │
-        │    - Output: WAV file        │
+        │ 1. Iniciar Grabación         │
+        │    - mic.start_recording()   │
+        └──────────────┬───────────────┘
+                       ↓
+        ┌──────────────────────────────┐
+        │ Usuario habla...             │
+        │ (mantiene botón presionado)  │
+        └──────────────┬───────────────┘
+                       ↓
+        ┌──────────────────────────────┐
+        │ Usuario suelta botón         │
+        │  - mic.stop_recording()      │
+        │  - Output: WAV file path     │
         └──────────────┬───────────────┘
                        ↓
      ┌────────────────────────────────────────┐
@@ -325,7 +330,7 @@ LISTEN_MAX_TTS_LENGTH = 500          # Máx caracteres para TTS
    - "Estoy 85% seguro de que quieres..."
 
 4. **Custom commands** - Crear comandos personalizados
-   - "Define 'ilumina' como 'camera-on'"
+   - "Define 'ilumina' como 'turn-on-camera'"
 
 5. **Voice profiles** - Adaptarse a diferentes voces
 

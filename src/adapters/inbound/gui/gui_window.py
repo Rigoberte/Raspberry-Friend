@@ -8,16 +8,7 @@ import threading
 import cv2
 import sys
 
-
-class MessageType:
-    """Tipos de mensajes para la consola."""
-    USER_INPUT = "user_input"
-    RESPONSE = "response"
-    ERROR = "error"
-    INFO = "info"
-    SUCCESS = "success"
-    WARNING = "warning"
-
+from src.application.services.task_event_logger import LoggerLevel
 
 class GUIWindow:
     """
@@ -39,12 +30,12 @@ class GUIWindow:
     COLOR_WARNING = "#ff9f00"   # Naranja para advertencias
 
     def __init__(
-        self,
-        title: str = "Raspberry Friend",
-        width: int = 900,
-        height: int = 700,
-        on_command: Optional[Callable[[str], None]] = None,
-    ):
+            self,
+            title: str = "Raspberry Friend",
+            width: int = 900,
+            height: int = 700,
+            on_command: Optional[Callable[[str], None]] = None,
+        ) -> None:
         """
         Inicializa la ventana GUI con tema oscuro.
 
@@ -276,12 +267,13 @@ class GUIWindow:
 
     def _configure_text_tags(self) -> None:
         """Configura los tags de colores para diferentes tipos de mensajes."""
-        self.output_text.tag_configure(MessageType.USER_INPUT, foreground=self.COLOR_USER, font=("Courier New", 10, "bold"))
-        self.output_text.tag_configure(MessageType.RESPONSE, foreground=self.COLOR_RESPONSE)
-        self.output_text.tag_configure(MessageType.ERROR, foreground=self.COLOR_ERROR, font=("Courier New", 10, "bold"))
-        self.output_text.tag_configure(MessageType.INFO, foreground=self.COLOR_INFO)
-        self.output_text.tag_configure(MessageType.SUCCESS, foreground=self.COLOR_SUCCESS, font=("Courier New", 10, "bold"))
-        self.output_text.tag_configure(MessageType.WARNING, foreground=self.COLOR_WARNING)
+        #self.output_text.tag_configure(MessageType.USER_INPUT, foreground=self.COLOR_USER, font=("Courier New", 10, "bold"))
+        #self.output_text.tag_configure(LoggerLevel.INFO, foreground=self.COLOR_RESPONSE)
+        self.output_text.tag_configure(LoggerLevel.DEBUG, foreground=self.COLOR_RESPONSE)
+        self.output_text.tag_configure(LoggerLevel.ERROR, foreground=self.COLOR_ERROR, font=("Courier New", 10, "bold"))
+        self.output_text.tag_configure(LoggerLevel.INFO, foreground=self.COLOR_INFO)
+        #self.output_text.tag_configure(MessageType.SUCCESS, foreground=self.COLOR_SUCCESS, font=("Courier New", 10, "bold"))
+        self.output_text.tag_configure(LoggerLevel.WARNING, foreground=self.COLOR_WARNING)
 
     def _on_enter_pressed(self, event) -> None:
         """Maneja cuando se presiona Enter en el campo de entrada."""
@@ -291,7 +283,7 @@ class GUIWindow:
         """Maneja el click del botón enviar."""
         command = self.input_text.get().strip()
         if command:
-            self.add_output(f"> {command}", MessageType.USER_INPUT)
+            self.add_output(f"> {command}", LoggerLevel.INFO)
             self.input_text.delete(0, tk.END)
             self.input_text.focus()
             if self.on_command:
@@ -300,7 +292,7 @@ class GUIWindow:
     def _on_listen_clicked(self) -> None:
         """Maneja el click del botón escuchar (para retrocompatibilidad)."""
         if self.on_listen:
-            self.add_output("🎤 Escuchando...", MessageType.INFO)
+            self.add_output("🎤 Escuchando...", LoggerLevel.INFO)
             # Deshabilitar botón mientras escucha
             self.listen_button.config(state=tk.DISABLED, text="⏺️ Grabando...")
             self.root.update()
@@ -319,13 +311,13 @@ class GUIWindow:
             thread = threading.Thread(target=listen_thread, daemon=True)
             thread.start()
         else:
-            self.add_output("⚠️ Comandos por voz no configurados", MessageType.WARNING)
+            self.add_output("Comandos por voz no configurados", LoggerLevel.WARNING)
 
     def _on_listen_press(self, event) -> None:
         """Maneja cuando se presiona el botón de escucha - INICIA grabación."""
         self.listen_press_time = time.time()
         self.listen_button.config(bg="#7a3fa0", text="⏺️ Grabando...")
-        self.add_output("🎤 Presionado... grabando", MessageType.INFO)
+        self.add_output("🎤 Presionado... grabando", LoggerLevel.INFO)
         
         # Iniciar grabación si existe callback para ello
         if self.on_start_recording:
@@ -346,7 +338,7 @@ class GUIWindow:
         
         # Detener grabación y procesar
         if self.on_stop_recording or self.on_listen_recording_done:
-            self.add_output(f"🎤 Grabó {duration:.2f} segundos. Procesando...", MessageType.INFO)
+            self.add_output(f"🎤 Grabó {duration:.2f} segundos. Procesando...", LoggerLevel.INFO)
             self.listen_button.config(state=tk.DISABLED)
             self.root.update()
             
@@ -366,7 +358,7 @@ class GUIWindow:
             thread = threading.Thread(target=listen_thread, daemon=True)
             thread.start()
         elif self.on_listen_with_duration:
-            self.add_output(f"🎤 Grabó {duration:.2f} segundos. Procesando...", MessageType.INFO)
+            self.add_output(f"🎤 Grabó {duration:.2f} segundos. Procesando...", LoggerLevel.INFO)
             self.listen_button.config(state=tk.DISABLED)
             self.root.update()
             
@@ -382,7 +374,7 @@ class GUIWindow:
             thread.start()
         elif self.on_listen:
             # Retrocompatibilidad: usar callback antiguo sin duración
-            self.add_output("🎤 Escuchando...", MessageType.INFO)
+            self.add_output("🎤 Escuchando...", LoggerLevel.INFO)
             self.listen_button.config(state=tk.DISABLED)
             self.root.update()
             
@@ -395,20 +387,33 @@ class GUIWindow:
             thread = threading.Thread(target=listen_thread, daemon=True)
             thread.start()
         else:
-            self.add_output("⚠️ Comandos por voz no configurados", MessageType.WARNING)
+            self.add_output("Comandos por voz no configurados", LoggerLevel.WARNING)
 
-    def add_output(self, message: str, message_type: str = MessageType.RESPONSE) -> None:
+    def add_output(self, message: str,  level: LoggerLevel) -> None:
         """
         Añade un mensaje a la consola de salida con tipo.
 
+        Encapsula la publicación en el hilo de UI sin exponer `root` a
+        consumidores externos.
+
         Args:
             message: Mensaje a mostrar
-            message_type: Tipo de mensaje para colorear
         """
-        self.output_text.config(state=tk.NORMAL)
-        self.output_text.insert(tk.END, message + "\n", message_type)
-        self.output_text.see(tk.END)
-        self.output_text.config(state=tk.DISABLED)
+        def _append_output():
+            self.output_text.config(state=tk.NORMAL)
+            self.output_text.insert(tk.END, message + "\n", level)
+            self.output_text.see(tk.END)
+            self.output_text.config(state=tk.DISABLED)
+
+        # Si estamos en el hilo principal, escribir directamente; si no, programar.
+        if threading.current_thread() is threading.main_thread():
+            _append_output()
+        else:
+            try:
+                self.root.after(0, _append_output)
+            except Exception:
+                # Fallback por seguridad si `after` no está disponible
+                _append_output()
 
     def _clear_output(self) -> None:
         """Limpia la consola de salida."""
@@ -487,7 +492,7 @@ class GUIWindow:
                     )
                     self.camera_canvas.itemconfig(self.camera_image_id, image=self.camera_photo)
         except Exception as e:
-            self.add_output(f"Error al mostrar frame de cámara: {str(e)}", MessageType.ERROR)
+            self.add_output(f"Error al mostrar frame de cámara: {str(e)}", LoggerLevel.ERROR)
 
     def clear_camera_display(self) -> None:
         """Limpia la pantalla de cámara y muestra el placeholder."""
@@ -510,7 +515,7 @@ class GUIWindow:
                         anchor=tk.CENTER
                     )
         except Exception as e:
-            self.add_output(f"Error al limpiar pantalla de cámara: {str(e)}", MessageType.ERROR)
+            self.add_output(f"Error al limpiar pantalla de cámara: {str(e)}", LoggerLevel.ERROR)
 
     def run(self) -> None:
         """Inicia el loop de la GUI."""

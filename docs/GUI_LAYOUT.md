@@ -31,10 +31,12 @@
 ║  │ turn-off-camera                                  │ ║
 ║  └──────────────────────────────────────────────────┘ ║
 ║                                                        ║
-║  [▶ Enviar] [🗑️  Limpiar]                             ║
+║  [▶ Enviar] [🎤 Escuchar] [🗑️  Limpiar]                ║
 ║                                                        ║
 ╚════════════════════════════════════════════════════════╝
 ```
+
+> **Nota**: El botón 🎤 Escuchar permite comandos de voz. Mantén presionado para grabar, suelta para procesar.
 
 ## Cambios Implementados
 
@@ -44,12 +46,17 @@
 - ✅ Panel inferior (30%) para consola y entrada
 - ✅ Divisor redimensionable entre paneles
 - ✅ Agregados métodos:
-  - `display_camera_frame(frame: np.ndarray)` - Muestra frames de OpenCV
+  - `display_camera_frame(frame: np.ndarray)` - Muestra frames de OpenCV (thread-safe)
   - `clear_camera_display()` - Limpia la pantalla de cámara
+  - `on_start_recording()` / `on_stop_recording()` - Callbacks para grabación de voz
 - ✅ Canvas dedicado para mostrar video
+- ✅ Botón 🎤 Escuchar con funcionalidad press-to-talk
 
-### 2. **gui_adapter.py**
-- ✅ Agregados métodos:
+### 2. **gui_adapter.py** (thread-safe con `root.after`)
+  - `clear_camera_display()` - Limpia la pantalla
+  - `set_voice_command_adapter()` - Conecta comandos de voz y micrófono
+  - `start_recording()` / `stop_recording()` - Manejo de grabación de audio
+- ✅ Crea `GUILoggerAdapter` internamente (nivel INFO por defecto)
   - `display_camera_frame(frame: np.ndarray)` - Envía frames al GUI
   - `clear_camera_display()` - Limpia la pantalla
 
@@ -72,7 +79,8 @@
 ## Características
 
 - 📺 **Stream de cámara en tiempo real** en el panel principal
-- 📋 **Consola siempre visible** para ver logs y comandos
+- 📋 **Consola siempre visible** para ver logs y  (thread-safe)
+- 🎤 **Comandos de voz** con botón press-to-talk integradocomandos
 - 🔄 **Divisor redimensionable** para ajustar proporción
 - 🎨 **Tema oscuro** mantenido en toda la interfaz
 - 🚀 **Carga de frames eficiente** con PIL/Pillow
@@ -83,9 +91,9 @@
 ```bash
 # Ejecutar el GUI
 python src/adapters/inbound/gui_main.py
-
-# En el GUI, escribir:
-turn-on-camera    # Inicia el stream en el panel principal
+:
+# - Escribe comandos: turn-on-camera, turn-off-camera, play-song, etc.
+# - Usa botón 🎤: mantén presionado para hablar, suelta para procesaren el panel principal
 turn-off-camera   # Detiene el stream
 ```
 
@@ -93,5 +101,7 @@ turn-off-camera   # Detiene el stream
 
 - Los frames se convierten de BGR (OpenCV) a RGB (PIL)
 - Las imágenes se redimensionan manteniendo aspecto
-- El placeholder "Esperando stream..." se muestra cuando la cámara no está activa
+- El placeholder "Esperando stream..." se muestra cuando la cámara no est
+- **Thread-safety**: `add_output()` usa `root.after(0, ...)` para publicar desde hilos secundarios
+- **Voice commands**: grabación controlada por eventos press/release del botón 🎤á activa
 - Los imports de PIL/Pillow y numpy están disponibles en requirements.txt

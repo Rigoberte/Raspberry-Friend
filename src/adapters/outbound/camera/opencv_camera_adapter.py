@@ -15,10 +15,10 @@ class OpenCVCameraAdapter(CameraPort):
     
     def __init__(self):
         self.camera = None
-        self.is_running = False
-        self.is_tracking = False
-        self.camera_thread = None
-        self.window_name = "Raspberry Friend - Camera"
+        self.is_running: bool = False
+        self.is_tracking: bool = False
+        self.camera_thread: Optional[threading.Thread] = None
+        self.window_name: str = "Raspberry Friend - Camera"
         self.view_callback: Optional[Callable] = None  # GUI/frame consumer
         self.clear_callback: Optional[Callable] = None
         self.face_cascade = None
@@ -26,10 +26,10 @@ class OpenCVCameraAdapter(CameraPort):
         self.thread_stopped.set()  # Initially stopped
         
         # Optimización para Raspberry Pi: frame skipping
-        self.frame_skip = 2  # Procesar cada 3er frame (30fps -> 10fps)
-        self.frame_counter = 0
-        self.target_fps = 10  # FPS objetivo para GUI (conservar energía)
-        self.frame_time = 1.0 / self.target_fps  # ~100ms entre frames
+        self.frame_skip: int = 2  # Procesar cada 3er frame (30fps -> 10fps)
+        self.frame_counter: int = 0
+        self.target_fps: int = 10  # FPS objetivo para GUI (conservar energía)
+        self.frame_time: float = 1.0 / self.target_fps  # ~100ms entre frames
     
     def track_my_face(self) -> dict[str, str | bool]:
         """

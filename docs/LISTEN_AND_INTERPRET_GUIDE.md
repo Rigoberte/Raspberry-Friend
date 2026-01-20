@@ -1,14 +1,16 @@
-# 🎤 Listen-and-Interpret: Diálogo Natural con el Robot
+# 🎤 Voice Command Adapter: Diálogo Natural con el Robot
 
 ## Descripción General
 
-El skill **`listen-and-interpret`** es un sistema inteligente que permite hablar naturalmente con Raspberry Friend. El robot:
+El **`VoiceCommandAdapter`** es un sistema inteligente que permite hablar naturalmente con Raspberry Friend. El robot:
 
-1. **Escucha** tu voz a través del micrófono
+1. **Escucha** tu voz a través del micrófono (botón 🎤 en GUI)
 2. **Transcribe** lo que dijiste con Gemini STT
 3. **Interpreta** si es una tarea del sistema o una consulta general
 4. **Ejecuta** la tarea O **responde** con Gemini
 5. **Reproduce** la respuesta por voz (TTS)
+
+> **Nota**: Este sistema se activa con el botón 🎤 Escuchar en la GUI. No es un comando de texto como los demás skills.
 
 ---
 
@@ -65,10 +67,10 @@ El sistema puede interpretar solicitudes para cualquiera de estos comandos:
 - `previous-song` - Canción anterior
 
 ### 🎥 Cámara
-- `camera-on` - Enciende la cámara
-- `camera-off` - Apaga la cámara
-- `track-face` - Activar seguimiento de rostro
-- `untrack-face` - Desactivar seguimiento de rostro
+- `turn-on-camera` - Enciende la cámara
+- `turn-off-camera` - Apaga la cámara
+- `track-my-face` - Activar seguimiento de rostro
+- `untrack-my-face` - Desactivar seguimiento de rostro
 
 ### 🎙️ Audio
 - `record-audio [duración]` - Graba audio
@@ -130,17 +132,13 @@ El sistema puede interpretar solicitudes para cualquiera de estos comandos:
 
 ## Uso en la GUI
 
-### Comando Manual
-```
-listen-to-me
-```
+### Botón de Micrófono 🎤
+1. **Mantén presionado** el botón 🎤 Escuchar
+2. **Habla** tu consulta o comando
+3. **Suelta** el botón cuando termines
+4. El robot transcribe, interpreta y responde automáticamente
 
-O con duración personalizada:
-```
-listen-to-me 15
-```
-
-(15 segundos de grabación en lugar de 10)
+La duración de grabación es el tiempo que mantengas presionado el botón.
 
 ---
 
@@ -152,11 +150,12 @@ listen-to-me 15
 2. **TranscribeSkill** - Convierte audio a texto (Gemini STT)
 3. **AI_ChatbotSkill** - Accede a Gemini para interpretación y respuestas
 4. **SaySkill** - Reproduce respuestas por voz (TTS)
-5. **CommandDispatcher** - Ejecuta comandos interpretados
-
-### Flujo Técnico
-
-```python
+5. **MicrophoneAdapter** - Graba audio del micrófono (con start/stop recording)
+2. **GeminiTranscriptionAdapter** - Convierte audio a texto (Gemini STT)
+3. **GeminiAdapter** - Accede a Gemini para interpretación y respuestas
+4. **Pyttsx3TTSAdapter** - Reproduce respuestas por voz (TTS)
+5. **AssistantService** - Ejecuta comandos interpretados
+6. **VoiceCommandAdapter** - Orquesta todo el flujo
 # 1. Grabar
 audio_path = mic.record(duration=10)
 
@@ -233,8 +232,8 @@ Usuario: "Siguiente canción"
 ### 2. Control de Cámara
 ```
 Usuario: "Enciende la cámara y rastrea mi cara"
-→ Detecta: camera-on + track-face (o dos comandos)
-→ Ejecuta: camera-on, track-face
+→ Detecta: turn-on-camera + track-my-face (o dos comandos)
+→ Ejecuta: turn-on-camera, track-my-face
 → Resultado: "Cámara activada con seguimiento..."
 ```
 

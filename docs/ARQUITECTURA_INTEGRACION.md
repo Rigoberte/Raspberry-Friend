@@ -63,31 +63,29 @@
 ## Secuencia de Inicialización
 
 ```
-main()
-  ↓
 build_gui_adapter(...)
   ├─ event_bus = InMemoryEventBus()
   ├─ executor = ThreadPoolExecutorAdapter()
-  ├─ music_player = PygameMusicPlayerPort()
-  ├─ camera = OpenCVCameraAdapter()  ←─────┐
-  │                                         │
-  ├─ registry = SkillRegistry()            │
-  │   ├─ register(CameraSkill(camera))     │
-  │   └─ ...                                │
-  │                                         │
-  ├─ dispatcher = CommandDispatcher()      │
-  ├─ scheduler = TaskScheduler()           │
-  ├─ assistant = AssistantService()        │
-  ├─ gui_adapter = GUIAdapter(...)         │
-  │                                         │
-  └─ camera.set_frame_callback(           │
-       gui_adapter.display_camera_frame     │
-     ) ←────────────────────────────────────┘
-  
-  ↓
-  gui_adapter.display_message("Bienvenido...")
-  
-  ↓
+  ├─ assistant, camera, voice_cmd, mic = build_assistant(...)
+  │
+  ├─ gui_adapter = GUIAdapter(
+  │     assistant_service=assistant,
+  │     event_bus=event_bus,
+  │     title="Raspberry Friend",
+  │     width=900,
+  │     height=700
+  │  )  # Crea GUILoggerAdapter internamente
+  │
+  ├─ camera.set_frame_callback(
+  │     gui_adapter.display_camera_frame  ←─────┐
+  │   )                                         │
+  │                                             │
+  └─ gui_adapter.set_voice_command_adapter(    │
+       voice_command_adapter=voice_cmd,        │
+       mic_adapter=mic                          │
+     )                                          │
+                                                │
+  ↓                                             │
   gui_adapter.run()  # Inicia mainloop de Tkinter
 ```
 
@@ -198,6 +196,11 @@ build_gui_adapter(...)
 │  GUIWindow                              │
 │                                         │
 │  def display_camera_frame(frame):       │
+│      # Convierte BGR→RGB con cv2        │
+│      # PIL.Image → PhotoImage           │
+│      # Muestra en canvas (thread-safe)  │
+│                                         │
+└─────────────────────────────────────────┘
 │      # Convierte BGR→RGB                │
 │      # Redimensiona                     │
 │      # Muestra en canvas                │

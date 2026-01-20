@@ -1,15 +1,15 @@
-from src.domain.models.command import Command
-from src.domain.models.command import CommandResult
-from src.application.services.command_dispatcher import CommandDispatcher
-from src.domain.ports.outbound.ai_chatbot_ports import AI_ChatBotPort
-from src.domain.ports.outbound.tts_ports import TTSPort
-
 import json
 import re
+import os
 from typing import Optional
 from pathlib import Path
-
 from google.genai import types as genai_types
+
+from src.domain.models.command import Command
+from src.domain.models.command import CommandResult
+from src.application.services.assistant_service import AssistantService
+from src.domain.ports.outbound.ai_chatbot_ports import AI_ChatBotPort
+from src.domain.ports.outbound.tts_ports import TTSPort
 
 INTERPRETATION_PROMPT = """
 Eres un asistente inteligente de un robot llamado Raspberry Friend.
@@ -87,7 +87,7 @@ class VoiceCommandAdapter:
 
     def __init__(
             self,
-            command_dispatcher: CommandDispatcher,
+            assistant_service: AssistantService,
             ai_service: AI_ChatBotPort,
             tts_service: TTSPort
         ) -> None:
@@ -101,7 +101,7 @@ class VoiceCommandAdapter:
             tts_service: Servicio TTS para respuestas habladas
             default_record_seconds: Segundos por defecto a grabar
         """
-        self._dispatcher: CommandDispatcher = command_dispatcher
+        self._assistant_service: AssistantService = assistant_service
         self._ai: AI_ChatBotPort = ai_service
         self._tts: TTSPort = tts_service
 
@@ -119,11 +119,13 @@ class VoiceCommandAdapter:
 
         data = result.get_data() or {}
         is_task = bool(data.get("is_task", False))
-        task_name = data.get("task_name")
+        task_name = data.get("task_name", "")
         response_payload = data.get("task_result") or data.get("response") or result.get_message()
         interpretation_text = data.get("interpretation")
         transcript = data.get("transcript", "")
 
+        os.remove(audio_path)
+        
         return {
             "success": result.is_successful(),
             "message": result.get_message(),
@@ -131,7 +133,7 @@ class VoiceCommandAdapter:
             "is_task": is_task,
             "task_name": task_name,
             "response": response_payload,
-            "interpretation": interpretation_text,
+            "interpretation": interpretation_text
         }
 
     def _handle(self, audio_path: str) -> CommandResult:
@@ -187,11 +189,11 @@ class VoiceCommandAdapter:
             interpretation_text = interpretation_data.get("interpretation", "")
             
             # ===== Árbol de decisión =====
-            if is_task and task_name and self._dispatcher:
+            if is_task and task_name and self._assistant_service:
                 # Es una tarea: ejecutar
                 task_command = Command(task_name, task_args)
                 try:
-                    task_result = self._dispatcher.handle(task_command)
+                    self._assistant_service.handle_command(task_command)
                 except Exception as exc:  # noqa: BLE001
                     error_response = f"Error ejecutando tarea {task_name}: {exc}"
                     self._speak_response(error_response)
@@ -206,36 +208,20 @@ class VoiceCommandAdapter:
                         }
                     )
                 
-                if task_result.is_successful():
-                    task_response = task_result.get_message()
-                    # Reproducir respuesta por voz
-                    self._speak_response(task_response)
-                    
-                    return CommandResult(
-                        success=True,
-                        message=f"✅ Tarea ejecutada: {task_name}\n💬 Respuesta: {task_response}",
-                        data={
-                            "is_task": True,
-                            "task_name": task_name,
-                            "task_args": task_args,
-                            "task_result": task_response,
-                            "interpretation": interpretation_text,
-                        }
-                    )
-                else:
-                    error_response = f"Error en la tarea: {task_result.get_message()}"
-                    self._speak_response(error_response)
-                    
-                    return CommandResult(
-                        success=False,
-                        message=f"❌ Error ejecutando tarea {task_name}: {task_result.get_message()}",
-                        data={
-                            "is_task": True,
-                            "task_name": task_name,
-                            "task_args": task_args,
-                            "interpretation": interpretation_text,
-                        }
-                    )
+                message = f"Tarea agregada: {task_name}"
+                self._speak_response(message)
+
+                return CommandResult(
+                    success=True,
+                    message=message,
+                    data={
+                        "is_task": True,
+                        "task_name": task_name,
+                        "task_args": task_args,
+                        "task_result": f"La tarea '{task_name}' ha sido agregada para su ejecución.",
+                        "interpretation": interpretation_text,
+                    }
+                )
             else:
                 # Es una consulta: responder directamente
                 if not response_text:

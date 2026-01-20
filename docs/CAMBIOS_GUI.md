@@ -48,21 +48,34 @@ Reorganizar el GUI para mostrar un panel grande con el stream de cámara cuando 
 
 **Cambios principales:**
 
-- **Nuevos imports:**
+- **Imports actualizados:**
   ```python
   import numpy as np
+  from src.domain.ports.outbound.logger_ports import LoggerPort
+  from src.adapters.outbound.logger.gui_logger_adapter import GUILoggerAdapter
+  from src.application.services.task_event_logger import LoggerLevel
   ```
+
+- **Constructor simplificado:**
+  - Ya no acepta parámetros `logger`, `logger_level`, `event_bus` por defecto
+  - Crea internamente `GUILoggerAdapter` con nivel INFO
+  - Recibe `title`, `width`, `height` como parámetros
 
 - **Nuevos métodos delegados:**
   ```python
   def display_camera_frame(self, frame: np.ndarray) -> None:
-      """Delegación a gui_window.display_camera_frame()"""
+      """Delegación thread-safe a gui_window.display_camera_frame()"""
   
   def clear_camera_display(self) -> None:
       """Delegación a gui_window.clear_camera_display()"""
+  
+  def set_voice_command_adapter(self, voice_command_adapter, mic_adapter) -> None:
+      """Conecta el adaptador de comandos de voz con el micrófono"""
   ```
 
-**Propósito:** Proporcionar una interfaz pública para que otros componentes (como el adaptador de cámara) puedan enviar frames.
+**Propósito:** 
+- Proporcionar una interfaz pública para que otros componentes (como el adaptador de cámara) puedan enviar frames.
+- Conectar el sistema de comandos de voz con la GUI (botón 🎤 Escuchar).
 
 ---
 
@@ -124,23 +137,36 @@ Reorganizar el GUI para mostrar un panel grande con el stream de cámara cuando 
 
 **Cambios principales:**
 
-- **Refactorización de `build_gui_adapter()`:**
-  - Antes: reutilizaba `build_assistant()` (compartía instancias)
-  - Ahora: crea instancias propias de adaptadores para mejor control
+- **Separación de `build_assistant()` y `build_gui_adapter()`:**
+  - `build_assistant()` crea el núcleo (skills, dispatcher, scheduler)
+  - `build_gui_adapter()` crea la GUI con sus dependencias específicas
   
 - **Conexión de cámara al GUI:**
   ```python
   # Crear adaptador GUI
-  gui_adapter = GUIAdapter(...)
+  gui_adapter = GUIAdapter(
+      assistant_service=assistant,
+      event_bus=event_bus,
+      title="Raspberry Friend",
+      width=900,
+      height=700
+  )
   
-  # Conectar cámara al GUI
+  # Conectar cámara al GUI mediante callback
   camera.set_frame_callback(gui_adapter.display_camera_frame)
+  
+  # Conectar comandos de voz
+  gui_adapter.set_voice_command_adapter(
+      voice_command_adapter=voice_command_adapter,
+      mic_adapter=mic_adapter
+  )
   ```
 
 **Ventajas:**
-- Mayor control sobre las dependencias
+- Separación clara entre núcleo y GUI
 - Conexión automática de cámara → GUI
-- Evita duplicación de código
+- Soporte para comandos de voz integrados en la GUI
+- Mejor inyección de dependencias
 
 ---
 
