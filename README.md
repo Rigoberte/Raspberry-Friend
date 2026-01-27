@@ -7,8 +7,12 @@ El proyecto está diseñado para crecer de forma **iterativa e incremental** apl
 Desarrollar un robot que pueda recibir instrucciones, moverse y más adelante conectarse con aplicaciones móviles y servidores externos.  
 
 ## 📂 Estado actual
-- Fase **MVP V0**: arquitectura inicial, entorno de desarrollo, pruebas unitarias base.  
-- Iteraciones futuras: control de hardware, conexión remota, interfaz móvil.  
+- Fase **V0.2**: GUI funcional, comandos de voz, skills extensibles, workflows, cámara con seguimiento facial
+- Arquitectura hexagonal implementada
+- Sistema de eventos y tareas asíncronas
+- Integración con Gemini AI para transcripción e interpretación
+- TTS (Text-to-Speech) y reconocimiento de voz
+- Iteraciones futuras: control de hardware GPIO, conexión remota, interfaz móvil  
 
 ## ⚙️ Requisitos
 - Python 3.11+  

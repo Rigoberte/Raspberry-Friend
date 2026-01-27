@@ -40,3 +40,11 @@ build/
 dist/
 *.egg-info/
 .eggs/
+
+# User data
+.userdata/
+*.mp3
+*.wav
+
+# Configs
+configs_dev.py
