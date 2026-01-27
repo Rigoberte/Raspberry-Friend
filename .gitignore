@@ -41,6 +41,10 @@ dist/
 *.egg-info/
 .eggs/
 
-# songs
-*.mp3
+# User data
 .userdata/
+*.mp3
+*.wav
+
+# Configs
+configs_dev.py

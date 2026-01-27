@@ -1,4 +1,4 @@
-# Robot Companion – Architecture & Class Diagram (MVP → v0.1)
+# Raspberry Friend – Architecture & Class Diagram (MVP → v0.1)
 
 > Objetivo: diseño extensible, iterativo/incremental y orientado a TDD, con módulos (skills) independientes, siguiendo POO (objetos completos/válidos, Null Object, inmutables, encapsulamiento estricto), preparado para futuras interfaces (CLI, HTTP/API, móvil) y futura ejecución en Raspberry Pi.
 
@@ -95,7 +95,7 @@
 +-------------------+                          +------------------+
 
 +-------------------+                          +------------------+
-| EchoSkill         |  implements              | NullSkill        |
+| EchoSkill         |  implements              | UnknownSkill        |
 |-------------------|------------------------->| (Null Object)    |
 | + can_handle()    |                          | + can_handle()   |
 | + handle()        |                          | + handle()       |
@@ -119,7 +119,7 @@
 **Inmutabilidad y Null Object**
 
 - `Command` y los *value objects* (p. ej., `ReminderTime`, `SkillId`) son **inmutables**.
-- `NullSkill` implementa `RobotSkill` y se usa cuando ningún módulo puede manejar un comando.
+- `UnknownSkill` implementa `RobotSkill` y se usa cuando ningún módulo puede manejar un comando.
 
 ---
 
@@ -184,7 +184,7 @@
 
 - **Objetos completos/válidos**: constructores garantizan invariantes (no hay objetos parciales).
 - **Inmutables**: `Command`, `Result`, `DomainEvent` y VOs.
-- **Null Object**: `NullSkill`, `NullValue`.
+- **Null Object**: `UnknownSkill`, `NullValue`.
 - **Encapsulamiento**: evitar getters/setters; exponer comportamientos (métodos) y no estado.
 - **SRP/OC**: cada clase hace una cosa; agregar skills no modifica clases existentes (Open/Closed).
 
