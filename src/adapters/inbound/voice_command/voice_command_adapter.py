@@ -22,6 +22,7 @@ El robot tiene los siguientes comandos disponibles:
 - previous-song: Canción anterior
 - pause-song: Pausa la música
 - resume-song: Reanuda la música
+- jump-to-pos <posición>: Salta a una posición específica en la canción actual.
 - record-audio [duracion]: Graba audio
 - transcribe <ruta_archivo>: Transcribe un archivo
 - wait <segundos>: Espera segundos

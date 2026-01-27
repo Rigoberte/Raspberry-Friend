@@ -51,6 +51,9 @@ class GUIAdapter:
         self.presenter.attach_view(self.window)
         
         self.window.on_command = self.presenter.handle_user_input
+
+        self.logger.info("Bienvenido a Raspberry Friend")
+        self.logger.info("Escribe un comando para comenzar (ej: 'echo Hola')")
     
     def display_camera_frame(self, frame: np.ndarray) -> None:
         try:

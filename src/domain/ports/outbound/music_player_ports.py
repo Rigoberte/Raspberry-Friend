@@ -59,3 +59,11 @@ class MusicPlayerPort(ABC):
     @abstractmethod
     def volume_down(self) -> dict[str, str | bool]:
         raise NotImplementedError
+    
+    @abstractmethod
+    def jump_to_pos(self, position_ms: int) -> dict[str, str | bool]:
+        raise NotImplementedError
+    
+    @abstractmethod
+    def get_current_song_duration(self) -> int:
+        raise NotImplementedError

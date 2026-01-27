@@ -10,7 +10,7 @@ from src.domain.models.tasks.continuous_task import ContinuousTask
 from src.domain.models.scheduling_policy import ScheduleKind
 from src.application.services.scheduling_policy_parser import SchedulingPolicyParser
 
-from src.application.use_cases.workflows.play_song_workflow import build_play_song_workflow #TODO: replace to do it extensible
+from src.application.use_cases.workflows.play_song_workflow import build_play_song_workflow #TODO: Mirar si se puede eliminar tanta complejidad para invocar un comando, task o workflow
 from src.application.use_cases.workflows.transcribe_me_workflow import build_transcribe_me_workflow
 
 

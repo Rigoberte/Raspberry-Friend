@@ -28,10 +28,11 @@ class MusicPlayerSkill(RobotSkill):
                 "get-pos" : "Get the current position of the song in seconds.",
                 "volume-up" : "Increase the volume.",
                 "volume-down" : "Decrease the volume.",
-                "set-volume" : "Set the volume to a specific level."
+                "set-volume" : "Set the volume to a specific level.",
+                "jump-to-pos": "Jump to a specific position in the current song."
             }
         )
-        self.service = service
+        self.service: MusicPlayerPort = service
 
     def handle(self, command: Command) -> CommandResult:
         match command.get_name():
@@ -79,6 +80,9 @@ class MusicPlayerSkill(RobotSkill):
 
             case "set-volume":
                 command_result = self.__set_volume__(command)
+
+            case "jump-to-pos":
+                command_result = self.__jump_to_pos__(command)
                 
         return command_result
     
@@ -205,6 +209,41 @@ class MusicPlayerSkill(RobotSkill):
             command_result,
             success_message=f"Volume set to {level_int * 100:.0f}%",
             failure_message="Failed to set volume"
+        )
+    
+    def __jump_to_pos__(self, command: Command) -> CommandResult:
+        text = str(command.get_args().get("text"))
+        position = text.split("-")[0].strip() if text else None
+        
+        if not position:
+            return CommandResult(False, "Usage: jump-to-pos <position_in_seconds>")
+        
+        if "%" in position:
+            percentage = float(position.replace("%", "").strip()) / 100
+            song_duration_ms = self.service.get_current_song_duration()
+            pos_int = int(percentage * song_duration_ms)
+        elif ":" in position:
+            time_parts = position.split(":")
+            if len(time_parts) == 2:
+                minutes = int(time_parts[0])
+                seconds = int(time_parts[1])
+                pos_int = minutes * 60 + seconds
+            elif len(time_parts) == 3:
+                hours = int(time_parts[0])
+                minutes = int(time_parts[1])
+                seconds = int(time_parts[2])
+                pos_int = hours * 3600 + minutes * 60 + seconds
+            else:
+                return CommandResult(False, "Invalid time format. Use MM:SS or HH:MM:SS.")
+        else:
+            return CommandResult(False, "Position must be in MM:SS/HH:MM:SS format or percentage.")
+
+        command_result = self.service.jump_to_pos(pos_int)
+
+        return self.__handle_command_result__(
+            command_result,
+            success_message=f"Jumped to position {pos_int} seconds.",
+            failure_message="Failed to jump to position"
         )
     
     def __handle_command_result__(self, command_result: dict[str, str | bool], success_message: str, failure_message: str) -> CommandResult:

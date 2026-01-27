@@ -141,8 +141,5 @@ def build_gui_adapter(
     camera.set_clear_callback(gui_adapter.clear_camera_display)
     
     gui_adapter.set_voice_command_adapter(voice_command_adapter, mic_adapter)
-
-    gui_adapter.logger.info("Bienvenido a Raspberry Friend") # TODO: SACAR ESTO
-    gui_adapter.logger.info("Escribe un comando para comenzar (ej: 'echo Hola')")
     
     return gui_adapter

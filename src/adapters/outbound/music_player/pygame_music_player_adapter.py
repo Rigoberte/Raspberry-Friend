@@ -12,15 +12,15 @@ except ImportError:
     HAS_MUTAGEN = False
 
 class PygameMusicPlayerPort(MusicPlayerPort):
-    def __init__(self, event_bus: EventBusPort | None = None):
+    def __init__(self, event_bus: EventBusPort):
         try:
-            self.mixer = pygame.mixer
+            self.mixer: pygame.mixer = pygame.mixer
             self.mixer.init()
 
-            self.current_index = 0
-            self.playlist = []
-            self._event_bus = event_bus
-            self._current_duration_ms = 0
+            self.current_index: int = 0
+            self.playlist: list[str] = []
+            self._event_bus: EventBusPort = event_bus
+            self._current_duration_ms: int = 0
 
         except pygame.error as e:
             print(f"Failed to initialize the mixer: {e}")
@@ -57,7 +57,7 @@ class PygameMusicPlayerPort(MusicPlayerPort):
         
         # Emitir evento de parada
         if result.get("success") and self.current_index >= 0 and self.current_index < len(self.playlist):
-            if self._event_bus:
+            if self._event_bus is not None:
                 song_path = self.playlist[self.current_index]
                 event = PlaybackStopped(
                     path=song_path,
@@ -132,6 +132,9 @@ class PygameMusicPlayerPort(MusicPlayerPort):
             "error-message": ""
         }
     
+    def jump_to_pos(self, position_ms: int) -> dict[str, str | bool]:
+        return self.__apply_if_busy__(self.mixer.music.set_pos, position_ms / 1000.0)
+    
     def __apply_if_busy__(self, func, *args, **kwargs) -> dict[str, str | bool]:
         if not self.is_busy():
             return {
@@ -186,3 +189,6 @@ class PygameMusicPlayerPort(MusicPlayerPort):
                 "success": False,
                 "error-message": f"Error changing song: {e}"
             }
+        
+    def get_current_song_duration(self) -> int:
+        return self._current_duration_ms
