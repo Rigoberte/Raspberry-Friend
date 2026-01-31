@@ -21,6 +21,7 @@ from src.application.events.event_bus import InMemoryEventBus
 
 from src.domain.ports.outbound.event_bus_ports import EventBusPort
 from src.domain.ports.outbound.task_executor_ports import TaskExecutorPort
+from src.domain.ports.outbound.camera_ports import CameraPort
 
 from src.adapters.outbound.weather.real_weather_adapter import RealWeatherPort
 from src.adapters.outbound.music_player.pygame_music_player_adapter import PygameMusicPlayerPort
@@ -45,7 +46,7 @@ else:
 def build_assistant(
     event_bus: EventBusPort,
     executor: TaskExecutorPort
-) -> tuple[AssistantService, OpenCVCameraAdapter, VoiceCommandAdapter, MicrophoneAdapter]:
+) -> tuple[AssistantService, CameraPort, VoiceCommandAdapter, MicrophoneAdapter]:
     """
     Construye e inyecta todas las dependencias del AssistantService.
     
@@ -54,10 +55,10 @@ def build_assistant(
         executor: Implementación del TaskExecutor (por defecto ThreadPoolExecutorAdapter)
 
     Returns:
-        Tupla (AssistantService, ProgressMonitorService, OpenCVCameraAdapter)
+        Tupla (AssistantService, ProgressMonitorService, CameraPort)
     """
     music_player = PygameMusicPlayerPort(event_bus=event_bus)
-    camera = OpenCVCameraAdapter()
+    camera: CameraPort = OpenCVCameraAdapter()
     gemini_adapter = GeminiAdapter(api_key=Configs.GEMINI_API_KEY.value)
     tts_adapter = Pyttsx3TTSAdapter(rate=150, volume=0.9)
     mic_adapter = MicrophoneAdapter(output_dir="user_data/media")

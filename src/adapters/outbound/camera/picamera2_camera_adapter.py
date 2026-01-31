@@ -2,6 +2,8 @@ from typing import Callable, Optional
 import threading
 import cv2
 import time
+import os
+from picamera2 import Picamera2
 
 from src.domain.ports.outbound.camera_ports import CameraPort
 from src.domain.models.pan_tilt_controller import PanTiltController
@@ -20,7 +22,7 @@ class PiCameraAdapter(CameraPort):
         Initialize PiCamera adapter.
 
         Args:
-            pan_tilt_controller: Optional PanTiltController instance
+            pan_tilt_controller: Optional[PanTiltController] = None
         """
         self.camera = None
         self.is_running = False
@@ -129,7 +131,10 @@ class PiCameraAdapter(CameraPort):
             
             time.sleep(0.3)
             
-            self.camera = cv2.VideoCapture(CAMERA_INDEX)
+            self.camera = Picamera2()
+            camera_config = self.camera.create_preview_configuration(main={"format": 'RGB888', "size": (640, 480)})
+            self.camera.configure(camera_config)
+            self.camera.start()
             
             if not self.camera.isOpened():
                 return {
@@ -170,15 +175,15 @@ class PiCameraAdapter(CameraPort):
                 print("Warning: Camera thread did not stop in time")
             
             # Now safe to release camera
-            if self.camera is not None:
+            if self.camera:
                 try:
-                    self.camera.release()
+                    self.camera.stop()
                 except Exception as e:
                     print(f"Error releasing camera: {e}")
                 self.camera = None
 
             # Wait for capture thread to finish
-            if self.camera_thread is not None and self.camera_thread.is_alive():
+            if self.camera_thread and self.camera_thread.is_alive():
                 self.camera_thread.join(timeout=1.0)
             self.camera_thread = None
             
@@ -188,7 +193,7 @@ class PiCameraAdapter(CameraPort):
             cv2.destroyAllWindows()
             
             # Llamar al callback de limpieza si existe (clear GUI display)
-            if self.clear_callback is not None:
+            if self.clear_callback:
                 try:
                     self.clear_callback()
                 except Exception as e:
@@ -212,11 +217,10 @@ class PiCameraAdapter(CameraPort):
             True if camera is available, False otherwise
         """
         try:
-            test_camera = cv2.VideoCapture(CAMERA_INDEX)
-            is_available = test_camera.isOpened()
-            test_camera.release()
-            return is_available
-        except Exception:
+            test_camera = Picamera2()
+            test_camera.close()
+            return True
+        except:
             return False
     
     def set_frame_callback(self, callback: Optional[Callable]) -> None:
@@ -287,16 +291,16 @@ class PiCameraAdapter(CameraPort):
         Sends frames to the callback if one is set, otherwise displays in window.
         Optimized for Raspberry Pi with frame skipping and throttling.
         """
-        import time as time_module
         
-        last_frame_time = time_module.time()
+        last_frame_time = time.time()
         
         try:
-            while self.is_running and self.camera is not None:
+            while self.is_running and self.camera:
                 try:
-                    ret, frame = self.camera.read()
+                    frame_raw = self.camera.capture_array()
+                    frame = cv2.cvtColor(frame_raw, cv2.COLOR_RGB2BGR)
                     
-                    if not ret or self.camera is None:
+                    if frame is None:
                         break
                     
                     self.frame_counter += 1
@@ -306,11 +310,11 @@ class PiCameraAdapter(CameraPort):
                         continue
                     
                     # Throttle a target_fps: no enviar frames más rápido que lo necesario
-                    current_time = time_module.time()
+                    current_time = time.time()
                     elapsed = current_time - last_frame_time
                     if elapsed < self.frame_time:
-                        time_module.sleep(self.frame_time - elapsed)
-                        current_time = time_module.time()
+                        time.sleep(self.frame_time - elapsed)
+                        current_time = time.time()
                     
                     last_frame_time = current_time
                     
