@@ -3,6 +3,7 @@ import threading
 import time
 from typing import Callable, Optional
 from src.domain.ports.outbound.camera_ports import CameraPort
+from src.domain.models.pan_tilt_controller import PanTiltController
 
 CAMERA_INDEX = 1  # Default camera index
 
@@ -11,6 +12,7 @@ class OpenCVCameraAdapter(CameraPort):
     Camera adapter implementation using OpenCV.
     Handles camera capture and display in a separate thread.
     Supports frame callbacks for GUI integration.
+    Integrates pan/tilt servo control for face tracking.
     """
     
     def __init__(self):
@@ -25,6 +27,10 @@ class OpenCVCameraAdapter(CameraPort):
         self.thread_stopped = threading.Event()  # Signal when thread has fully stopped
         self.thread_stopped.set()  # Initially stopped
         
+        # Pan/Tilt servo control
+        self.pan_tilt_controller: PanTiltController = PanTiltController()
+        self.key_callback: Optional[Callable] = None  # For keyboard input handling
+        
         # Optimización para Raspberry Pi: frame skipping
         self.frame_skip: int = 2  # Procesar cada 3er frame (30fps -> 10fps)
         self.frame_counter: int = 0
@@ -35,6 +41,7 @@ class OpenCVCameraAdapter(CameraPort):
         """
         Enable face tracking without restarting the camera.
         Uses Haar cascade for lightweight face detection.
+        Integrates pan/tilt servo control for automatic face following.
 
         Returns:
             dict with 'success' (bool) and 'error-message' (str) keys
@@ -63,6 +70,10 @@ class OpenCVCameraAdapter(CameraPort):
                 }
 
             self.is_tracking = True
+            
+            # Set pan/tilt controller to auto mode if available
+            self.pan_tilt_controller.set_auto_mode()
+            
             self.window_name = "Raspberry Friend - Face Tracking"
 
             return {"success": True, "error-message": ""}
@@ -74,8 +85,15 @@ class OpenCVCameraAdapter(CameraPort):
             }
 
     def untrack_my_face(self) -> dict[str, str | bool]:
-        """Disable face tracking while keeping camera on."""
+        """
+        Disable face tracking while keeping camera on.
+        Switches pan/tilt controller back to manual mode if available.
+        """
         self.is_tracking = False
+        
+        # Switch back to manual mode if pan/tilt controller is available
+        self.pan_tilt_controller.set_manual_mode()
+        
         self.window_name = "Raspberry Friend - Camera"
         return {"success": True, "error-message": ""}
     
@@ -208,6 +226,54 @@ class OpenCVCameraAdapter(CameraPort):
         """
         self.clear_callback = callback
     
+    def set_key_callback(self, callback: Optional[Callable]) -> None: # TODO: Creo que no se usa
+        """
+        Set a callback function to handle keyboard input.
+        
+        Callback receives key codes (from cv2.waitKey).
+        
+        Args:
+            callback: Function that accepts key code (int) or None to disable
+        """
+        self.key_callback = callback
+    
+    def handle_keyboard_input(self, key: int) -> None:
+        """
+        Handle keyboard input for manual servo control.
+        
+        - SPACE: Toggle between manual and auto tracking modes
+        - W: Move tilt up
+        - S: Move tilt down
+        - A: Move pan left
+        - D: Move pan right
+        
+        Args:
+            key: Key code from cv2.waitKey()
+        """
+        # Space: toggle tracking mode
+        if key == ord(' '):
+            if self.pan_tilt_controller.is_manual_mode():
+                self._toggle_face_tracking()
+            else:
+                self.untrack_my_face()
+        # Manual control keys (only in manual mode)
+        elif self.pan_tilt_controller.is_manual_mode():
+            if key == ord('w'):
+                self.pan_tilt_controller.move_tilt_up()
+            elif key == ord('s'):
+                self.pan_tilt_controller.move_tilt_down()
+            elif key == ord('a'):
+                self.pan_tilt_controller.move_pan_left()
+            elif key == ord('d'):
+                self.pan_tilt_controller.move_pan_right()
+    
+    def _toggle_face_tracking(self) -> None:
+        """Toggle face tracking on/off."""
+        if self.is_tracking:
+            self.untrack_my_face()
+        else:
+            self.track_my_face()
+    
     def __display_camera_feed__(self):
         """
         Internal method to display camera feed in real-time.
@@ -269,7 +335,10 @@ class OpenCVCameraAdapter(CameraPort):
                 pass
 
     def __annotate_faces__(self, frame):
-        """Detect faces in the frame and render bounding boxes."""
+        """
+        Detect faces in the frame and render bounding boxes.
+        If in auto tracking mode, automatically adjust pan/tilt servos.
+        """
         if not self.is_tracking:
             return frame
 
@@ -283,7 +352,21 @@ class OpenCVCameraAdapter(CameraPort):
             )
 
             for (x, y, w, h) in faces:
+                # Draw face bounding box
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                
+                # Draw face center point
+                face_center_x = x + w // 2
+                face_center_y = y + h // 2
+                cv2.circle(frame, (face_center_x, face_center_y), 5, (0, 0, 255), -1)
+                
+                # Auto-track face if controller is available and in auto mode
+                if (self.pan_tilt_controller.is_auto_mode()):
+                    self.pan_tilt_controller.track_face(x, y, w, h)
+                
+                # Only track the first detected face
+                break
         except Exception as exc:  # noqa: BLE001
             print(f"Error in face tracking: {exc}")
+        
         return frame
