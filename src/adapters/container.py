@@ -26,7 +26,7 @@ from src.domain.ports.outbound.camera_ports import CameraPort
 from src.adapters.outbound.weather.real_weather_adapter import RealWeatherPort
 from src.adapters.outbound.music_player.pygame_music_player_adapter import PygameMusicPlayerPort
 from src.adapters.outbound.task_executor.thread_pool_executor_adapter import ThreadPoolExecutorAdapter
-from src.adapters.outbound.camera.opencv_camera_adapter import OpenCVCameraAdapter
+from src.adapters.outbound.camera.picamera2_camera_adapter import PiCameraAdapter
 from src.adapters.outbound.ai_chatbot.gemini_adapter import GeminiAdapter
 from src.adapters.outbound.tts.pyttsx3_tts_adapter import Pyttsx3TTSAdapter
 from src.adapters.outbound.microphone.microphone_adapter import MicrophoneAdapter
@@ -58,7 +58,7 @@ def build_assistant(
         Tupla (AssistantService, ProgressMonitorService, CameraPort)
     """
     music_player = PygameMusicPlayerPort(event_bus=event_bus)
-    camera: CameraPort = OpenCVCameraAdapter()
+    camera: CameraPort = PiCameraAdapter()
     gemini_adapter = GeminiAdapter(api_key=Configs.GEMINI_API_KEY.value)
     tts_adapter = Pyttsx3TTSAdapter(rate=150, volume=0.9)
     mic_adapter = MicrophoneAdapter(output_dir="user_data/media")
