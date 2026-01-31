@@ -128,6 +128,13 @@ class PiCameraAdapter(CameraPort):
             # Ensure previous thread is fully cleaned up before reopening
             if not self.thread_stopped.is_set():
                 self.thread_stopped.wait(timeout=2.0)
+
+            if self.camera:
+                try:
+                    self.camera.stop()
+                    self.camera.close()
+                except Exception:
+                    pass
             
             time.sleep(0.3)
             
@@ -178,6 +185,7 @@ class PiCameraAdapter(CameraPort):
             if self.camera:
                 try:
                     self.camera.stop()
+                    self.camera.close()
                 except Exception as e:
                     print(f"Error releasing camera: {e}")
                 self.camera = None
@@ -216,12 +224,10 @@ class PiCameraAdapter(CameraPort):
         Returns:
             True if camera is available, False otherwise
         """
-        try:
-            test_camera = Picamera2()
-            test_camera.close()
-            return True
-        except:
-            return False
+        if self.is_running:
+            return True  # Already running
+        
+        return os.path.exists("/dev/video0") or os.path.exists("/dev/media0")
     
     def set_frame_callback(self, callback: Optional[Callable]) -> None:
         """Set a callback function to receive processed frames (GUI)."""
