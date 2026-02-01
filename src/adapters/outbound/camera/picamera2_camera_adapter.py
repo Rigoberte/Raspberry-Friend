@@ -67,30 +67,26 @@ class PiCameraAdapter(CameraPort):
             return {"success": True, "error-message": ""}
 
         try:
+            # Load Haar cascade if not already loaded
             if self.face_cascade is None:
                 cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
                 self.face_cascade = cv2.CascadeClassifier(cascade_path)
-
-            if self.face_cascade is None or self.face_cascade.empty():
-                return {
-                    "success": False,
-                    "error-message": "Failed to load face detection model"
-                }
-
-            self.is_tracking = True
+                
+                if self.face_cascade.empty():
+                    return {"success": False, "error-message": "Failed to load face cascade"}
             
-            # Set pan/tilt controller to auto mode if available
+            # Enable tracking mode
+            self.is_tracking = True
+            self.window_name = "Raspberry Friend - Face Tracking"
+            
+            # Set pan/tilt controller to auto mode
             self.pan_tilt_controller.set_auto_mode()
             
-            self.window_name = "Raspberry Friend - Face Tracking"
-
             return {"success": True, "error-message": ""}
-        except Exception as exc:  # noqa: BLE001
-            self.is_tracking = False
-            return {
-                "success": False,
-                "error-message": f"Error enabling face tracking: {exc}"
-            }
+            
+        except Exception as exc:
+            return {"success": False, "error-message": f"Failed to enable face tracking: {exc}"}
+
 
     def untrack_my_face(self) -> dict[str, str | bool]:
         """
@@ -139,15 +135,9 @@ class PiCameraAdapter(CameraPort):
             time.sleep(0.3)
             
             self.camera = Picamera2()
-            camera_config = self.camera.create_preview_configuration(main={"format": 'RGB888', "size": (640, 480)})
+            camera_config = self.camera.create_preview_configuration(main={"format": 'BGR888', "size": (640, 480)})
             self.camera.configure(camera_config)
             self.camera.start()
-            
-            if not self.camera.isOpened():
-                return {
-                    "success": False,
-                    "error-message": "Failed to open camera"
-                }
             
             self.is_running = True
             self.thread_stopped.clear()  # Mark thread as not stopped
@@ -298,57 +288,46 @@ class PiCameraAdapter(CameraPort):
         Optimized for Raspberry Pi with frame skipping and throttling.
         """
         
-        last_frame_time = time.time()
-        
         try:
-            while self.is_running and self.camera:
-                try:
-                    frame_raw = self.camera.capture_array()
-                    frame = cv2.cvtColor(frame_raw, cv2.COLOR_RGB2BGR)
-                    
-                    if frame is None:
-                        break
-                    
-                    self.frame_counter += 1
-                    
-                    # Frame skipping: procesar cada N frames (reduce CPU en RPi)
-                    if self.frame_counter % (self.frame_skip + 1) != 0:
-                        continue
-                    
-                    # Throttle a target_fps: no enviar frames más rápido que lo necesario
-                    current_time = time.time()
-                    elapsed = current_time - last_frame_time
-                    if elapsed < self.frame_time:
-                        time.sleep(self.frame_time - elapsed)
-                        current_time = time.time()
-                    
-                    last_frame_time = current_time
-                    
-                    # Apply tracking overlay if enabled (solo si se procesa el frame)
-                    if self.is_tracking and self.face_cascade is not None:
-                        frame = self.__annotate_faces__(frame)
-
-                    # Send frame to GUI callback if set
-                    if self.view_callback is not None:
-                        try:
-                            self.view_callback(frame)
-                        except Exception as e:
-                            print(f"Error in frame callback: {str(e)}")
-                    # If no callback, drop frame to avoid creating external windows
+            while self.is_running:
+                frame_start = time.time()
                 
-                except Exception as e:
-                    print(f"Error in camera feed: {str(e)}")
-                    break
+                # Capture frame from PiCamera
+                frame = self.camera.capture_array()
+                
+                # Convert RGB to BGR for OpenCV processing
+                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                
+                # Frame skipping for performance optimization
+                self.frame_counter += 1
+                should_process = (self.frame_counter % (self.frame_skip + 1)) == 0
+                
+                if should_process:
+                    # Process frame: detect faces and control servos if tracking
+                    frame_bgr = self.__annotate_faces__(frame_bgr)
+                
+                # Send frame to GUI callback if available
+                if self.view_callback is not None:
+                    try:
+                        self.view_callback(frame_bgr)
+                    except Exception as e:
+                        print(f"Error in view callback: {e}")
+                
+                # Frame rate limiting
+                elapsed = time.time() - frame_start
+                sleep_time = self.frame_time - elapsed
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+                    
+        except Exception as e:
+            print(f"Camera feed error: {e}")
         finally:
-            # Signal that thread has finished
             self.thread_stopped.set()
-            # Final cleanup
-            try:
-                if self.camera is not None:
-                    self.camera.release()
-                    self.camera = None
-            except Exception:
-                pass
+            if self.clear_callback is not None:
+                try:
+                    self.clear_callback()
+                except Exception:
+                    pass
 
     def __annotate_faces__(self, frame):
         """
@@ -358,31 +337,50 @@ class PiCameraAdapter(CameraPort):
         if not self.is_tracking:
             return frame
 
-        try:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = self.face_cascade.detectMultiScale(
-                gray,
-                scaleFactor=1.2,
-                minNeighbors=5,
-                minSize=(60, 60),
-            )
-
-            for (x, y, w, h) in faces:
-                # Draw face bounding box
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                
-                # Draw face center point
-                face_center_x = x + w // 2
-                face_center_y = y + h // 2
-                cv2.circle(frame, (face_center_x, face_center_y), 5, (0, 0, 255), -1)
-                
-                # Auto-track face if controller is available and in auto mode
-                if (self.pan_tilt_controller.is_auto_mode()):
-                    self.pan_tilt_controller.track_face(x, y, w, h)
-                
-                # Only track the first detected face
+        if self.face_cascade is None:
+            return frame
+        
+        # Convert to grayscale for face detection
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        
+        # Detect faces with optimized parameters for Raspberry Pi
+        faces = self.face_cascade.detectMultiScale(
+            gray,
+            scaleFactor=1.2,
+            minNeighbors=5,
+            minSize=(80, 80)
+        )
+        
+        # Process each detected face
+        for (x, y, w, h) in faces:
+            # Draw rectangle around face
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            
+            # Draw center point of face
+            center_x = x + w // 2
+            center_y = y + h // 2
+            cv2.circle(frame, (center_x, center_y), 5, (0, 0, 255), -1)
+            
+            # If tracking is enabled, update servo positions
+            if self.is_tracking:
+                self.pan_tilt_controller.track_face(x, y, w, h)
                 break
-        except Exception as exc:  # noqa: BLE001
-            print(f"Error in face tracking: {exc}")
+        
+        # Draw tracking status on frame
+        mode_text = "TRACKING: ON" if self.is_tracking else "TRACKING: OFF"
+        color = (0, 255, 0) if self.is_tracking else (0, 0, 255)
+        cv2.putText(frame, mode_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+        
+        # Draw deadzone rectangle (center of frame)
+        frame_h, frame_w = frame.shape[:2]
+        center_frame_x = frame_w // 2
+        center_frame_y = frame_h // 2
+        deadzone = 10  # pixels
+        cv2.rectangle(
+            frame,
+            (center_frame_x - deadzone, center_frame_y - deadzone),
+            (center_frame_x + deadzone, center_frame_y + deadzone),
+            (255, 255, 255), 1
+        )
         
         return frame
