@@ -22,6 +22,7 @@ class OpenCVCameraAdapter(CameraPort):
         self.window_name: str = "Raspberry Friend - Camera"
         self.view_callback: Optional[Callable] = None  # GUI/frame consumer
         self.clear_callback: Optional[Callable] = None
+        self.mode_change_callback: Optional[Callable[[str], None]] = None  # Notifica cambios de modo
         self.face_cascade = None
         self.thread_stopped = threading.Event()  # Signal when thread has fully stopped
         self.thread_stopped.set()  # Initially stopped
@@ -67,6 +68,10 @@ class OpenCVCameraAdapter(CameraPort):
             self.is_tracking = True
             
             self.window_name = "Raspberry Friend - Face Tracking"
+            
+            # Notificar cambio de modo a la UI
+            if self.mode_change_callback:
+                self.mode_change_callback("auto")
 
             return {"success": True, "error-message": ""}
         except Exception as exc:  # noqa: BLE001
@@ -84,6 +89,11 @@ class OpenCVCameraAdapter(CameraPort):
         self.is_tracking = False
         
         self.window_name = "Raspberry Friend - Camera"
+        
+        # Notificar cambio de modo a la UI
+        if self.mode_change_callback:
+            self.mode_change_callback("manual")
+        
         return {"success": True, "error-message": ""}
     
     def start_camera(self) -> dict[str, str | bool]:
@@ -121,9 +131,14 @@ class OpenCVCameraAdapter(CameraPort):
                 }
             
             self.is_running = True
+            self.is_tracking = False  # Iniciar en modo manual
             self.thread_stopped.clear()  # Mark thread as not stopped
             self.camera_thread = threading.Thread(target=self.__display_camera_feed__, daemon=True)
             self.camera_thread.start()
+            
+            # Notificar UI para mostrar joystick en modo manual
+            if self.mode_change_callback:
+                self.mode_change_callback("manual")
             
             return {
                 "success": True,
@@ -147,6 +162,10 @@ class OpenCVCameraAdapter(CameraPort):
             self.is_tracking = False
             # DO NOT clear callback - it will be reused on restart
             self.window_name = "Raspberry Friend - Camera"
+            
+            # Notificar UI para ocultar joystick
+            if self.mode_change_callback:
+                self.mode_change_callback(None)
             
             # Wait for thread to stop reading before releasing camera
             if not self.thread_stopped.wait(timeout=2.5):
@@ -314,3 +333,13 @@ class OpenCVCameraAdapter(CameraPort):
             print(f"Error in face tracking: {exc}")
         
         return frame
+
+    def set_mode_change_callback(self, callback: Optional[Callable[[str], None]]) -> None:
+        """
+        Set callback for camera mode changes (manual vs auto face tracking).
+        
+        Args:
+            callback: Function(mode: str) where mode is 'manual' or 'auto'
+                     None to disable callbacks
+        """
+        self.mode_change_callback = callback

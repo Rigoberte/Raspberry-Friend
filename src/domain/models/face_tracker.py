@@ -11,9 +11,6 @@ class FaceTracker:
     CENTER_X: int = 640 // 2
     CENTER_Y: int = 480 // 2
 
-    # Tracking parameters
-    DEADZONE: int = 10  # Pixels: minimum error to trigger movement
-
     def calculate_error_from_face_center(self, 
             face_x: int, face_y: int, 
             face_w: int, face_h: int
@@ -38,12 +35,5 @@ class FaceTracker:
         error_x = self.CENTER_X - face_center_x
         error_y = self.CENTER_Y - face_center_y
 
-
-        # Apply deadzone
-        if abs(error_x) < self.DEADZONE:
-            error_x = 0
-
-        if abs(error_y) < self.DEADZONE:
-            error_y = 0
 
         return error_x, error_y

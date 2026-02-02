@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import scrolledtext
+from tkinter import scrolledtext, ttk
 from typing import Callable, Optional
 from PIL import Image, ImageTk
 import numpy as np
@@ -7,13 +7,16 @@ import time
 import threading
 import cv2
 import sys
+import math
 
 from src.application.services.task_event_logger import LoggerLevel
+from src.domain.ports.inbound.pan_tilt_ui_ports import PanTiltUIPort
 
-class GUIWindow:
+class GUIWindow(PanTiltUIPort):
     """
     Interfaz gráfica moderna con tema oscuro.
     Proporciona una consola para escribir comandos y mostrar respuestas.
+    Implementa PanTiltUIPort para controlar la visualización de controles pan/tilt.
     """
 
     # Colores del tema oscuro
@@ -52,6 +55,12 @@ class GUIWindow:
         self.on_listen_recording_done = None  # Callback cuando termina grabación interactiva
         self.on_start_recording = None  # Callback para iniciar grabación
         self.on_stop_recording = None  # Callback para detener grabación
+        
+        # Pan/Tilt joystick control
+        self.joystick_frame: Optional[tk.Frame] = None
+        self.joystick_canvas: Optional[tk.Canvas] = None
+        self.pan_tilt_control_callback: Optional[Callable[[int, int], None]] = None
+        
         self.root = tk.Tk()
         self.root.title(title)
         self.root.geometry(f"{width}x{height}")
@@ -115,15 +124,19 @@ class GUIWindow:
         )
         camera_label.pack(anchor=tk.W, padx=15, pady=(15, 8))
 
-        # Canvas para mostrar frames de cámara
+        # Frame horizontal para cámara + joystick lado a lado
+        camera_joystick_frame = tk.Frame(camera_frame, bg=self.BG_PRIMARY)
+        camera_joystick_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
+
+        # Canvas para mostrar frames de cámara (izquierda)
         self.camera_canvas = tk.Canvas(
-            camera_frame,
+            camera_joystick_frame,
             bg=self.BG_SECONDARY,
             highlightbackground=self.BG_SECONDARY,
             highlightthickness=0,
             relief=tk.FLAT
         )
-        self.camera_canvas.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
+        self.camera_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
 
         # Placeholder de texto cuando no hay cámara
         self.camera_placeholder = tk.Label(
@@ -146,6 +159,11 @@ class GUIWindow:
             )
 
         self.camera_canvas.bind("<Configure>", on_canvas_resize)
+        
+        # Placeholder para el joystick (derecha)
+        # Se llenará dinámicamente cuando se llame a _setup_joystick_controls()
+        self.joystick_container = tk.Frame(camera_joystick_frame, bg=self.BG_PRIMARY)
+        self.joystick_container.pack(side=tk.RIGHT, fill=tk.BOTH, expand=False)
 
         # === Panel Inferior: Consola ===
         console_frame = tk.Frame(paned_window, bg=self.BG_PRIMARY)
@@ -516,6 +534,174 @@ class GUIWindow:
                     )
         except Exception as e:
             self.add_output(f"Error al limpiar pantalla de cámara: {str(e)}", LoggerLevel.ERROR)
+
+    # === Implementación de PanTiltUIPort ===
+    
+    def show_pan_tilt_controls(self) -> None:
+        """Mostrar el joystick virtual para controlar pan/tilt."""
+        if self.joystick_frame is None:
+            self._setup_joystick_controls()
+        
+        if self.joystick_frame is not None:
+            self.joystick_frame.pack(fill=tk.BOTH, expand=True)
+    
+    def hide_pan_tilt_controls(self) -> None:
+        """Ocultar el joystick virtual."""
+        if self.joystick_frame is not None:
+            self.joystick_frame.pack_forget()
+            self._reset_joystick_visual()
+    
+    def set_pan_tilt_control_callback(self, callback: Optional[Callable[[int, int], None]]) -> None:
+        """Establecer callback para eventos del joystick."""
+        self.pan_tilt_control_callback = callback
+    
+    def _setup_joystick_controls(self) -> None:
+        """Crear el joystick virtual en el contenedor."""
+        if self.joystick_frame is not None:
+            return  # Ya existe
+        
+        self.joystick_frame = ttk.LabelFrame(
+            self.joystick_container,
+            text="🎮 Pan/Tilt Control",
+            padding=10
+        )
+        self.joystick_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Canvas para el joystick
+        self.joystick_canvas = tk.Canvas(
+            self.joystick_frame,
+            width=180,
+            height=180,
+            bg=self.BG_SECONDARY,
+            cursor="hand2",
+            relief=tk.FLAT,
+            borderwidth=0
+        )
+        self.joystick_canvas.pack()
+        
+        # Bindings para interacción
+        self.joystick_canvas.bind("<Motion>", self._on_joystick_motion)
+        self.joystick_canvas.bind("<Leave>", self._on_joystick_leave)
+        self.joystick_canvas.bind("<Button-1>", self._on_joystick_press)
+        self.joystick_canvas.bind("<ButtonRelease-1>", self._on_joystick_release)
+        
+        # Dibujar joystick inicial
+        self._reset_joystick_visual()
+    
+    def _reset_joystick_visual(self) -> None:
+        """Resetear la visualización del joystick al centro."""
+        if self.joystick_canvas is None:
+            return
+        
+        self.joystick_canvas.delete("all")
+        
+        w = 180
+        h = 180
+        center_x = w // 2
+        center_y = h // 2
+        radius = 70
+        
+        # Círculo externo (límite)
+        self.joystick_canvas.create_oval(
+            center_x - radius,
+            center_y - radius,
+            center_x + radius,
+            center_y + radius,
+            outline=self.FG_ACCENT,
+            width=2
+        )
+        
+        # Líneas de referencia (cruz)
+        self.joystick_canvas.create_line(
+            center_x, center_y - radius,
+            center_x, center_y + radius,
+            fill=self.BG_PRIMARY, dash=(4, 4)
+        )
+        self.joystick_canvas.create_line(
+            center_x - radius, center_y,
+            center_x + radius, center_y,
+            fill=self.BG_PRIMARY, dash=(4, 4)
+        )
+        
+        # Círculo central (posición actual)
+        self.joystick_canvas.create_oval(
+            center_x - 8,
+            center_y - 8,
+            center_x + 8,
+            center_y + 8,
+            fill=self.FG_ACCENT,
+            tags="joystick_knob"
+        )
+    
+    def _on_joystick_motion(self, event) -> None:
+        """Manejar movimiento del mouse en el joystick."""
+        if self.pan_tilt_control_callback is None or self.joystick_canvas is None:
+            return
+        
+        w = 180
+        h = 180
+        center_x = w // 2
+        center_y = h // 2
+        radius = 70
+        
+        # Calcular offset desde el centro
+        offset_x = event.x - center_x
+        offset_y = event.y - center_y
+        
+        # Limitar al radio del joystick
+        distance = math.sqrt(offset_x**2 + offset_y**2)
+        if distance > radius:
+            ratio = radius / distance
+            offset_x *= ratio
+            offset_y *= ratio
+        
+        # Zona muerta (30% del radio)
+        deadzone = radius * 0.3
+        
+        # Determinar dirección pan: -1 (izquierda), 0 (centro), 1 (derecha)
+        pan_dir = 0
+        if offset_x < -deadzone:
+            pan_dir = -1
+        elif offset_x > deadzone:
+            pan_dir = 1
+        
+        # Determinar dirección tilt: -1 (abajo), 0 (centro), 1 (arriba)
+        tilt_dir = 0
+        if offset_y < -deadzone:
+            tilt_dir = 1  # Positivo = arriba
+        elif offset_y > deadzone:
+            tilt_dir = -1  # Negativo = abajo
+        
+        # Actualizar posición visual del knob
+        self.joystick_canvas.delete("joystick_knob")
+        self.joystick_canvas.create_oval(
+            center_x + offset_x - 8,
+            center_y + offset_y - 8,
+            center_x + offset_x + 8,
+            center_y + offset_y + 8,
+            fill=self.COLOR_SUCCESS,
+            tags="joystick_knob"
+        )
+        
+        # Llamar callback con direcciones
+        print(f"DEBUG GUI: Pan={pan_dir}, Tilt={tilt_dir}")
+        self.pan_tilt_control_callback(pan_dir, tilt_dir)
+    
+    def _on_joystick_leave(self, event) -> None:
+        """Cuando el mouse sale del joystick, resetear a centro."""
+        self._reset_joystick_visual()
+        if self.pan_tilt_control_callback:
+            self.pan_tilt_control_callback(0, 0)
+    
+    def _on_joystick_press(self, event) -> None:
+        """Click en joystick."""
+        self._on_joystick_motion(event)
+    
+    def _on_joystick_release(self, event) -> None:
+        """Release del joystick."""
+        self._reset_joystick_visual()
+        if self.pan_tilt_control_callback:
+            self.pan_tilt_control_callback(0, 0)
 
     def run(self) -> None:
         """Inicia el loop de la GUI."""

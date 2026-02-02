@@ -49,6 +49,17 @@ class CameraPort(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def set_mode_change_callback(self, callback: Optional[Callable[[str], None]]) -> None:
+        """
+        Set callback for camera mode changes (manual vs auto face tracking).
+        
+        Args:
+            callback: Function(mode: str) where mode is 'manual' or 'auto'
+                     None to disable callbacks
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def track_my_face(self) -> dict[str, str | bool]:
         """
         Enable face tracking using the already running camera without restarting it.

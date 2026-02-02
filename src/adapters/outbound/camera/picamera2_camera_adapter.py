@@ -31,6 +31,7 @@ class PiCameraAdapter(CameraPort):
         self.window_name: str = "Raspberry Friend - Camera"
         self.view_callback: Optional[Callable] = None  # GUI/frame consumer
         self.clear_callback: Optional[Callable] = None
+        self.mode_change_callback: Optional[Callable[[str], None]] = None  # Notifica cambios de modo
         self.face_cascade = None
         self.thread_stopped = threading.Event()  # Signal when thread has fully stopped
         self.thread_stopped.set()  # Initially stopped
@@ -40,10 +41,30 @@ class PiCameraAdapter(CameraPort):
         self.key_callback: Optional[Callable] = None  # For keyboard input handling
         
         # Optimización para Raspberry Pi: frame skipping
-        self.frame_skip: int = 2  # Procesar cada 3er frame (30fps -> 10fps)
+        self.frame_skip: int = 1
         self.frame_counter: int = 0
-        self.target_fps: int = 10  # FPS objetivo para GUI (conservar energía)
+        self.target_fps: int = 24  # FPS objetivo para GUI (conservar energía)
         self.frame_time: float = 1.0 / self.target_fps  # ~100ms entre frames
+
+    def set_frame_callback(self, callback: Optional[Callable]) -> None:
+        """
+        Set a callback function to receive camera frames.
+        The callback will be called with each frame as numpy array.
+        
+        Args:
+            callback: Function that accepts a frame (numpy array) or None to disable
+        """
+        self.view_callback = callback
+
+    def set_mode_change_callback(self, callback: Optional[Callable[[str], None]]) -> None:
+        """
+        Set callback for camera mode changes (manual vs auto face tracking).
+        
+        Args:
+            callback: Function(mode: str) where mode is 'manual' or 'auto'
+                     None to disable callbacks
+        """
+        self.mode_change_callback = callback
 
     def track_my_face(self) -> dict[str, str | bool]:
         """
@@ -82,6 +103,10 @@ class PiCameraAdapter(CameraPort):
             # Set pan/tilt controller to auto mode
             self.pan_tilt_controller.set_auto_mode()
             
+            # Notificar cambio de modo a la UI (sin acoplamiento directo)
+            if self.mode_change_callback:
+                self.mode_change_callback("auto")
+            
             return {"success": True, "error-message": ""}
             
         except Exception as exc:
@@ -97,6 +122,10 @@ class PiCameraAdapter(CameraPort):
         
         # Switch back to manual mode if pan/tilt controller is available
         self.pan_tilt_controller.set_manual_mode()
+        
+        # Notificar cambio de modo a la UI (sin acoplamiento directo)
+        if self.mode_change_callback:
+            self.mode_change_callback("manual")
         
         self.window_name = "Raspberry Friend - Camera"
         return {"success": True, "error-message": ""}
@@ -140,9 +169,15 @@ class PiCameraAdapter(CameraPort):
             self.camera.start()
             
             self.is_running = True
+            self.is_tracking = False  # Iniciar en modo manual
+            self.pan_tilt_controller.set_manual_mode()
             self.thread_stopped.clear()  # Mark thread as not stopped
             self.camera_thread = threading.Thread(target=self.__display_camera_feed__, daemon=True)
             self.camera_thread.start()
+            
+            # Notificar UI para mostrar joystick en modo manual
+            if self.mode_change_callback:
+                self.mode_change_callback("manual")
             
             return {
                 "success": True,
@@ -166,6 +201,10 @@ class PiCameraAdapter(CameraPort):
             self.is_tracking = False
             # DO NOT clear callback - it will be reused on restart
             self.window_name = "Raspberry Friend - Camera"
+            
+            # Notificar UI para ocultar joystick
+            if self.mode_change_callback:
+                self.mode_change_callback(None)  # None indica que debe ocultarse
             
             # Wait for thread to stop reading before releasing camera
             if not self.thread_stopped.wait(timeout=2.5):
@@ -218,10 +257,6 @@ class PiCameraAdapter(CameraPort):
             return True  # Already running
         
         return os.path.exists("/dev/video0") or os.path.exists("/dev/media0")
-    
-    def set_frame_callback(self, callback: Optional[Callable]) -> None:
-        """Set a callback function to receive processed frames (GUI)."""
-        self.view_callback = callback
     
     def set_clear_callback(self, callback: Optional[Callable]) -> None:
         """
@@ -362,9 +397,8 @@ class PiCameraAdapter(CameraPort):
             cv2.circle(frame, (center_x, center_y), 5, (0, 0, 255), -1)
             
             # If tracking is enabled, update servo positions
-            if self.is_tracking:
-                self.pan_tilt_controller.track_face(x, y, w, h)
-                break
+            self.pan_tilt_controller.track_face(x, y, w, h)
+            break
         
         # Draw tracking status on frame
         mode_text = "TRACKING: ON" if self.is_tracking else "TRACKING: OFF"

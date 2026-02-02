@@ -4,6 +4,7 @@ from src.adapters.inbound.gui.gui_window import GUIWindow
 from src.adapters.inbound.gui.presenters.console_presenter import ConsolePresenter
 from src.adapters.inbound.voice_command.voice_command_adapter import VoiceCommandAdapter
 from src.domain.ports.outbound.microphone_ports import MicrophonePort
+from src.domain.ports.outbound.camera_ports import CameraPort
 
 from src.application.use_cases.execute_command_use_case import ExecuteCommandUseCase
 from src.application.services.assistant_service import AssistantService
@@ -27,6 +28,7 @@ class GUIAdapter:
         self.voice_command_adapter: VoiceCommandAdapter = None  # Se conectará después # TODO: SACAR SETTER con Null Pattern Object
         self._mic_adapter: MicrophonePort = None  # Para grabación interactiva # TODO: SACAR SETTER con Null Pattern Object
         self._last_recording_path: str = None  # Path del último archivo grabado
+        self.camera_adapter: CameraPort = None  # Se conectará después
         
         self.window: GUIWindow = GUIWindow(
             title=title,
@@ -55,6 +57,20 @@ class GUIAdapter:
         self.logger.info("Bienvenido a Raspberry Friend")
         self.logger.info("Escribe un comando para comenzar (ej: 'echo Hola')")
     
+    def set_camera_adapter(self, camera_adapter: CameraPort) -> None:
+        """
+        Conectar el camera adapter y establecer callbacks.
+        Esto mantiene la arquitectura desacoplada.
+        """
+        self.camera_adapter = camera_adapter
+        
+        # Conectar callbacks de frames y modo
+        self.camera_adapter.set_frame_callback(self.display_camera_frame)
+        self.camera_adapter.set_mode_change_callback(self._on_camera_mode_changed)
+        
+        # Conectar callback del joystick a los controles del pan/tilt
+        self.window.set_pan_tilt_control_callback(self._on_joystick_control)
+    
     def display_camera_frame(self, frame: np.ndarray) -> None:
         try:
             frame_copy = frame.copy()
@@ -64,6 +80,43 @@ class GUIAdapter:
 
     def clear_camera_display(self) -> None:
         self.window.clear_camera_display()
+    
+    def _on_camera_mode_changed(self, mode: str) -> None:
+        """
+        Callback llamado cuando el camera adapter cambia de modo.
+        Muestra/oculta el joystick según el modo.
+        """
+        if mode == "manual":
+            self.window.show_pan_tilt_controls()
+        elif mode == "auto":
+            self.window.hide_pan_tilt_controls()
+        elif mode is None:  # Cámara detenida
+            self.window.hide_pan_tilt_controls()
+    
+    def _on_joystick_control(self, pan_dir: int, tilt_dir: int) -> None:
+        """
+        Callback del joystick para controlar los servos.
+        Mantiene la lógica del control pan/tilt fuera de la GUI.
+        """
+        if not self.camera_adapter:
+            return
+        
+        if not hasattr(self.camera_adapter, 'pan_tilt_controller'):
+            return #camera_adapter no tiene pan_tilt_controller
+        
+        pan_tilt = self.camera_adapter.pan_tilt_controller
+        
+        # Pan (izquierda/derecha)
+        if pan_dir == -1:
+            pan_tilt.move_pan_left()
+        elif pan_dir == 1:
+            pan_tilt.move_pan_right()
+        
+        # Tilt (arriba/abajo)
+        if tilt_dir == 1:
+            pan_tilt.move_tilt_up()
+        elif tilt_dir == -1:
+            pan_tilt.move_tilt_down()
 
     def set_voice_command_adapter(self, voice_command_adapter: VoiceCommandAdapter, mic_adapter: MicrophonePort) -> None:
         self.voice_command_adapter = voice_command_adapter

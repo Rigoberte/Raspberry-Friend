@@ -30,8 +30,9 @@ class PanTiltController:
     DEFAULT_PAN = 90
     DEFAULT_TILT = 90
     MANUAL_STEP = 5  # Degrees per key press
+    DEADZONE: int = 50  # Pixels: minimum error to trigger movement
     
-    SENSITIVITY: float = 0.015  # Ratio of pixel error to angle adjustment
+    SENSITIVITY: float = 0.005  # Ratio of pixel error to angle adjustment
 
     def __init__(self):
         """
@@ -98,6 +99,13 @@ class PanTiltController:
         error_x, error_y = self.face_tracker.calculate_error_from_face_center(
             face_x, face_y, face_w, face_h
         )
+
+        # Apply deadzone
+        if abs(error_x) < self.DEADZONE:
+            error_x = 0
+
+        if abs(error_y) < self.DEADZONE:
+            error_y = 0
         
         # Calculate angle adjustments
         adjust_pan = error_x * self.SENSITIVITY
